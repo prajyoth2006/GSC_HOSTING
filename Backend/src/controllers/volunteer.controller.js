@@ -6,41 +6,41 @@ import { Task } from "../models/task.model.js";
 
 // location availablty
 export const toggleAvailability = asyncHandler(async (req, res) => {
-    // 1. Get the new status and exact GPS coordinates from the frontend
     const { isAvailable, coordinates } = req.body;
 
     if (typeof isAvailable !== "boolean") {
-        throw new ApiError(400, "Please provide a valid true/false for isAvailable");
+        throw new ApiError(400, "Please provide a valid true/false status");
     }
 
-    // 2. Prepare the update object
     let updateFields = { isAvailable };
 
-    // 3. If they are going on-duty, the frontend will send their current GPS coordinates
-    if (coordinates && Array.isArray(coordinates) && coordinates.length === 2) {
-        updateFields.location = {
-            type: "Point",
-            coordinates: coordinates // Must be [Longitude, Latitude]
-        };
+    if (isAvailable) {
+        // Validation: Must have coordinates to go online
+        if (!coordinates || !Array.isArray(coordinates) || coordinates.length !== 2) {
+            throw new ApiError(400, "GPS coordinates are required to go online.");
+        }
+
+        // GIS Validation: Ensure numbers are within global bounds
+        const [lng, lat] = coordinates;
+        if (lng < -180 || lng > 180 || lat < -90 || lat > 90) {
+            throw new ApiError(400, "Invalid GPS coordinates provided.");
+        }
+
+        updateFields.location = { type: "Point", coordinates: [lng, lat] };
+    } else {
+        // Optional: If offline, we might want to keep the last known location
+        // or set it to null so they disappear from "Live Maps" entirely.
+        // updateFields.location = null; 
     }
 
-    // 4. Update the user in the database (req.user._id comes from verifyJWT)
     const updatedUser = await User.findByIdAndUpdate(
         req.user._id,
         { $set: updateFields },
-        { new: true, select: "-password" } // Return updated user, hide password
+        { new: true, select: "-password" }
     );
 
-    if (!updatedUser) {
-        throw new ApiError(404, "User not found");
-    }
-
-    const message = isAvailable 
-        ? "You are now online and your location has been updated." 
-        : "You are now offline. Get some rest!";
-
     return res.status(200).json(
-        new ApiResponse(200, updatedUser, message)
+        new ApiResponse(200, updatedUser, isAvailable ? "Online" : "Offline")
     );
 });
 
@@ -146,36 +146,29 @@ export const addCompletionNote = asyncHandler(async (req, res) => {
 // SOS / ESCALATE TASK
 export const escalateTask = asyncHandler(async (req, res) => {
     const { taskId } = req.params;
-    const { reason } = req.body; // Optional: Why they are escalating it
+    const { reason } = req.body;
 
-    // 1. Find the task assigned to this exact volunteer
     const task = await Task.findOne({
         _id: taskId,
         assignedVolunteer: req.user._id
     });
 
-    if (!task) {
-        throw new ApiError(404, "Task not found or you are not authorized to escalate it.");
-    }
+    if (!task) throw new ApiError(404, "Task not found or unauthorized.");
+    if (task.status === "Completed") throw new ApiError(400, "Cannot escalate a finished task.");
 
-    // 2. We don't want them escalating a task they already finished!
-    if (task.status === "Completed") {
-        throw new ApiError(400, "Cannot escalate a completed task.");
-    }
+    // Resetting for the next volunteer
+    task.status = "Pending";
+    task.severity = 5; 
+    task.assignedVolunteer = null; 
 
-    // 3. Perform the Escalation Logic
-    task.status = "Pending"; // Send it back to the Admin's queue
-    task.severity = 5;       // Bump to maximum Critical severity
-    task.assignedVolunteer = null; // Unassign the current volunteer
-
-    // 4. If they provided a reason, prepend it to the raw report text so the Admin sees it immediately
-    if (reason) {
-        task.rawReportText = `[🚨 ESCALATED SOS]: ${reason}\n\n--- Original Report ---\n${task.rawReportText}`;
-    }
+    // Use a specific field for escalation notes if you have it, 
+    // otherwise, your prepending method is fine but let's make it cleaner:
+    const timestamp = new Date().toLocaleString();
+    task.rawReportText += `\n\n[🚨 ESCALATED ${timestamp}]: ${reason || "No reason provided"}`;
 
     await task.save();
 
     return res.status(200).json(
-        new ApiResponse(200, task, "Task escalated successfully. Admin has been notified and you have been unassigned.")
+        new ApiResponse(200, task, "Task escalated to Admin.")
     );
 });
