@@ -8,7 +8,6 @@ import { Task } from "../models/task.model.js";
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// extract task from image using AI and sending it back to the user for verification
 export const extractTaskFromImage = asyncHandler(async (req, res) => {
     if (!req.file) {
         throw new ApiError(400, "No image file provided");
@@ -17,17 +16,14 @@ export const extractTaskFromImage = asyncHandler(async (req, res) => {
     const filePath = req.file.path;
 
     try {
-        // 1. Read the image saved by multer
         const imageAsBase64 = fs.readFileSync(filePath).toString("base64");
         const imagePart = {
             inlineData: { data: imageAsBase64, mimeType: req.file.mimetype },
         };
 
-        // 2. Set up Gemini (1.5 Flash is perfect for fast image processing)
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-        // 3. The Prompt: Instruct Gemini to read the community needs report
-       // 3. The Prompt: Strictly typed for the updated Task schema
+        // --- UPDATED PROMPT: Added 'searchableAddress' ---
         const prompt = `
             You are an expert data extractor assisting in disaster response and community management.
             Analyze this handwritten field report. 
@@ -35,36 +31,63 @@ export const extractTaskFromImage = asyncHandler(async (req, res) => {
             
             Expected JSON structure:
             {
-                "title": "A short, punchy summary of the crisis (e.g., 'Fallen Tree on Powerline', 'Severe Flooding')",
+                "title": "A short, punchy summary of the crisis",
                 "rawReportText": "A complete, word-for-word transcription of the handwritten text in the image",
                 "category": "You MUST categorize this into exactly ONE of the following: 'Medical', 'Rescue', 'Food & Water', 'Shelter', 'Sanitation', 'Labor', 'Transport', 'Supplies', 'Animal Rescue', 'Infrastructure', 'Other'",
-                "severity": Analyze the urgency and return a single integer between 1 and 5 (1 being lowest, 5 being critical/life-threatening),
+                "severity": Analyze the urgency and return a single integer between 1 and 5,
                 "requiredSkills": ["Skill 1", "Skill 2"],
-                "locationDescription": "A textual description of the location mentioned in the report (e.g., 'Behind the community center on Main St.')",
+                "locationDescription": "The exact, detailed description of the location as mentioned in the text (e.g., 'Intersection of hostel Arya Bhatta and Kalam, IIT Patna').",
+                "searchableAddress": "A simplified, broader address optimized for Google Maps Geocoding API. Remove hyper-specific local landmarks and just give the main institution, street, city, and state (e.g., 'IIT Patna, Bihta, Bihar, India').",
                 "location": {
                     "type": "Point",
-                    "coordinates": [longitude, latitude] // Estimate from the text if a known city/landmark is mentioned, otherwise default to [0,0]
+                    "coordinates": [0, 0] 
                 }
             }
         `;
 
-        // 4. Send to Gemini
         const result = await model.generateContent([prompt, imagePart]);
-        const responseText = result.response.text();
+        const cleanResponse = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+        const extractedData = JSON.parse(cleanResponse);
 
-        // 5. Parse the JSON string from Gemini into a JavaScript object
-        const extractedData = JSON.parse(responseText.trim());
+        // --- UPDATED GEOCODING: Use the new searchableAddress ---
+        // We use the simplified address for Google Maps, but keep the detailed description for the database
+        const addressToSearch = extractedData.searchableAddress || extractedData.locationDescription;
 
-        // 6. Send it back to the frontend for the Field Worker to review before saving
+        if (addressToSearch) {
+            try {
+                const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+                const encodedAddress = encodeURIComponent(addressToSearch);
+                const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${apiKey}`;
+                
+                const geoResponse = await fetch(geocodeUrl);
+                const geoData = await geoResponse.json();
+
+                console.log(`🔍 Geocoding address: "${addressToSearch}"`);
+                console.log("Google Maps Geocoding Response:", geoData);    
+
+                if (geoData.status === "OK" && geoData.results.length > 0) {
+                    const { lat, lng } = geoData.results[0].geometry.location;
+                    extractedData.location.coordinates = [lng, lat];
+                    console.log(`✅ Geocoding successful for "${addressToSearch}": [${lng}, ${lat}]`);
+                } else {
+                    console.warn(`⚠️ Google Maps could not find coordinates for: "${addressToSearch}". Defaulting to [0,0].`);
+                }
+            } catch (geoError) {
+                console.error("❌ Google Maps API Error:", geoError.message);
+            }
+        }
+
+        // We can safely delete searchableAddress before sending to the frontend since the DB doesn't need it
+        delete extractedData.searchableAddress;
+
         return res.status(200).json(
-            new ApiResponse(200, extractedData, "Field report analyzed successfully")
+            new ApiResponse(200, extractedData, "Field report analyzed and geocoded successfully")
         );
 
     } catch (error) {
-        console.error("Gemini AI Error:", error);
+        console.error("Extraction Error:", error);
         throw new ApiError(500, "Failed to analyze the field report image.");
     } finally {
-        // 7. ALWAYS delete the local file after processing to save server space
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
         }
@@ -113,65 +136,101 @@ export const saveTask = asyncHandler(async (req, res) => {
     );
 });
 
-// CREATE TASK MANUALLY (AI AUTO-TAGGING)
+// CREATE TASK MANUALLY (AI AUTO-TAGGING & GEOCODING)
 export const createTaskManually = asyncHandler(async (req, res) => {
-    // 1. We only ask the user for the bare minimum details
     const { 
         title, 
         rawReportText, 
-        severity, 
         locationDescription, 
         location 
     } = req.body;
 
-    if (!title || !rawReportText || !severity || !locationDescription) {
-        throw new ApiError(400, "Please provide the title, description, severity, and location.");
+    // 1. Basic Text Validation
+    if (!title || !rawReportText || !locationDescription) {
+        throw new ApiError(400, "Title, report text, and location description are required.");
     }
 
     try {
-        // 2. Wake up Gemini to analyze what the worker just typed
+        // --- 2. THE LOCATION GATEKEEPER ---
+        let finalCoordinates = null;
+
+        // Check if user provided valid coordinates in the request
+        if (location?.coordinates && 
+            location.coordinates.length === 2 && 
+            (location.coordinates[0] !== 0 || location.coordinates[1] !== 0)) {
+            
+            finalCoordinates = location.coordinates;
+            console.log("📍 Using user-provided coordinates.");
+        } 
+        // If not, try Google Maps
+        else {
+            console.log("🔍 Attempting to geocode address...");
+            try {
+                const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+                const encodedAddress = encodeURIComponent(locationDescription);
+                const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${apiKey}`;
+                
+                const geoResponse = await fetch(geocodeUrl);
+                const geoData = await geoResponse.json();
+
+                if (geoData.status === "OK" && geoData.results.length > 0) {
+                    const { lat, lng } = geoData.results[0].geometry.location;
+                    finalCoordinates = [lng, lat];
+                    console.log(`✅ Geocoding successful: [${lng}, ${lat}]`);
+                }
+            } catch (geoError) {
+                console.error("❌ Google Maps API Error:", geoError.message);
+            }
+        }
+
+        // 🚨 THE CRITICAL CHECK: If we still don't have coordinates, STOP HERE.
+        if (!finalCoordinates) {
+            throw new ApiError(400, "Location could not be determined. Please provide valid coordinates or a more specific address.");
+        }
+
+        // --- 3. Gemini AI Analysis (Category, Skills, Severity) ---
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-        // 3. The Auto-Tagger Prompt
         const prompt = `
             You are an expert emergency dispatcher. 
-            Read the following disaster report submitted by a field worker.
+            Analyze this report:
             Title: "${title}"
             Description: "${rawReportText}"
 
-            Based on this text, predict the most accurate category and the required skills needed to fix it.
-            Return ONLY a valid JSON object. Do not include markdown like \`\`\`json.
-            
-            Expected JSON structure:
+            Return ONLY a valid JSON object:
             {
-                "category": "You MUST choose exactly ONE of these: 'Medical', 'Rescue', 'Food & Water', 'Shelter', 'Sanitation', 'Labor', 'Transport', 'Supplies', 'Animal Rescue', 'Infrastructure', 'Other'",
-                "requiredSkills": ["List 2 to 4 specific skills needed, e.g., 'First Aid', 'Debris Removal', 'Plumbing'"]
+                "category": "Choose ONE: 'Medical', 'Rescue', 'Food & Water', 'Shelter', 'Sanitation', 'Labor', 'Transport', 'Supplies', 'Animal Rescue', 'Infrastructure', 'Other'",
+                "requiredSkills": ["List 2-4 skills"],
+                "severity": Integer 1-5 (5 is most urgent)
             }
         `;
 
         const result = await model.generateContent(prompt);
-        const aiPrediction = JSON.parse(result.response.text().trim());
+        const cleanResponse = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+        const aiAnalysis = JSON.parse(cleanResponse);
 
-        // 4. Merge the worker's input with the AI's predictions and save to the database!
+        // --- 4. Save to Database ---
         const newTask = await Task.create({
             title,
             rawReportText,
-            category: aiPrediction.category, // <-- AI's choice!
-            severity: Number(severity),
-            requiredSkills: aiPrediction.requiredSkills || [], // <-- AI's choice!
             locationDescription,
-            location: location || { type: "Point", coordinates: [0, 0] },
+            category: aiAnalysis.category || "Other",
+            severity: aiAnalysis.severity || 3,
+            requiredSkills: aiAnalysis.requiredSkills || [],
+            location: { type: "Point", coordinates: finalCoordinates },
             reportedBy: req.user._id, 
             status: "Pending"
         });
 
-        // 5. Send the successfully saved task back to the frontend
         return res.status(201).json(
-            new ApiResponse(201, newTask, "Digital report auto-tagged and saved successfully!")
+            new ApiResponse(201, newTask, "Task created successfully with AI analysis.")
         );
 
     } catch (error) {
-        console.error("AI Auto-Tagging Error:", error);
-        throw new ApiError(500, "Failed to analyze and save the report.");
+        // Handle specific ApiErrors (like our location check) differently than general crashes
+        if (error instanceof ApiError) throw error;
+
+        console.error("Task Creation Error:", error);
+        throw new ApiError(500, "Internal Server Error while creating task.");
     }
 });
