@@ -2,6 +2,9 @@ import { User } from "../models/user.model.js";
 import { asyncHandler } from "../utils/asyncHandler.js"; 
 import { ApiError } from "../utils/ApiError.js";         
 import { ApiResponse } from "../utils/ApiResponse.js";   
+import { GoogleGenerativeAI } from "@google/generative-ai";
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+import jwt from "jsonwebtoken";
 
 const generateAccessAndRefreshTokens = async (userId) => {
     try {
@@ -21,12 +24,12 @@ const generateAccessAndRefreshTokens = async (userId) => {
 // ==========================================
 // REGISTER USER (Redirect to Login Flow)
 // ==========================================
-const registerUser = asyncHandler(async (req, res) => {
-    // 1. Extract data from request body
-    console.log("Request received on register");
-    const { name, email, password, role, skills, location } = req.body;
 
-    // 2. Validate required fields
+const registerUser = asyncHandler(async (req, res) => {
+    console.log("Request received on register");
+    
+    const { name, email, password, role, skills, location, adminKey } = req.body;
+
     if (
         [name, email, password, role].some((field) => field?.trim() === "") ||
         !name || !email || !password || !role
@@ -34,32 +37,78 @@ const registerUser = asyncHandler(async (req, res) => {
         throw new ApiError(400, "All required fields (name, email, password, role) must be provided");
     }
 
-    // 3. Check if user already exists
+    // Admin Passkey Validation
+    if (role === 'Admin' || role === 'Main') {
+        const requiredKey = role === 'Admin' ? process.env.ADMIN_REGISTRATION_KEY : process.env.MAIN_REGISTRATION_KEY;
+        if (!adminKey) {
+            throw new ApiError(403, `${role} registration key is required`);
+        }
+        if (adminKey !== requiredKey) {
+            throw new ApiError(403, `Invalid ${role} registration key`);
+        }
+    }
+
     const existedUser = await User.findOne({ email });
     if (existedUser) {
         throw new ApiError(409, "User with this email already exists");
     }
 
-    // 4. Create the user object
-    // (Password is automatically hashed by the pre-save hook in user.model.js)
-    const user = await User.create({
+    // --- Prepare Base User Data (Applies to ALL roles) ---
+    const userData = {
         name,
         email,
         password,
-        role,
-        skills: role === 'Volunteer' ? skills : [],
-        location: location || { type: 'Point', coordinates: [0, 0] }
-    });
+        role
+    };
 
-    // 5. Verify the user was successfully created
+    // --- Conditionally Add Volunteer Fields ---
+    if (role === 'Volunteer') {
+        let assignedCategory = 'Other';
+
+        if (skills && skills.length > 0) {
+            try {
+                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                const prompt = `
+                    Analyze the following list of skills provided by a disaster relief volunteer: ${skills.join(", ")}.
+                    Based on these skills, assign the volunteer to EXACTLY ONE of the following categories:
+                    'Medical', 'Rescue', 'Food & Water', 'Shelter', 'Sanitation', 'Labor', 'Transport', 'Supplies', 'Animal Rescue', 'Infrastructure', 'Other'.
+                    Respond with ONLY the category name. Do not include any extra text.
+                `;
+
+                const result = await model.generateContent(prompt);
+                const responseText = result.response.text().trim();
+
+                const validCategories = [
+                    'Medical', 'Rescue', 'Food & Water', 'Shelter', 
+                    'Sanitation', 'Labor', 'Transport', 'Supplies', 
+                    'Animal Rescue', 'Infrastructure', 'Other'
+                ];
+
+                if (validCategories.includes(responseText)) {
+                    assignedCategory = responseText;
+                }
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                // assignedCategory naturally falls back to 'Other'
+            }
+        }
+
+        // Attach volunteer-specific data
+        userData.skills = skills || [];
+        userData.category = assignedCategory;
+        userData.location = location || { type: 'Point', coordinates: [0, 0] };
+        userData.isAvailable = true; // Volunteers start as available by default
+    }
+
+    // Create the user with the dynamically built object
+    const user = await User.create(userData);
+
     if (!user) {
         throw new ApiError(500, "Something went wrong while registering the user");
     }
 
-    // 6. Fetch the created user without the password and refresh token for the response
     const createdUser = await User.findById(user._id).select("-password -refreshToken");
 
-    // 7. Send the structured success response (No Tokens Included)
     return res
         .status(201)
         .json(
@@ -194,27 +243,74 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 // ==========================================
 const updateAccountDetails = asyncHandler(async (req, res) => {
     const { name, skills, isAvailable, location } = req.body;
+    
+    // The user's role should be available via the auth middleware (e.g., verifyJWT)
+    const userRole = req.user?.role; 
 
-    // We do not want to update passwords or emails here for security reasons.
-    // Only update the fields the user actually sent in the request body.
+    // 1. Initialize the update object with fields applicable to ALL users
     const updateData = {};
     if (name) updateData.name = name;
-    if (skills) updateData.skills = skills;
-    if (isAvailable !== undefined) updateData.isAvailable = isAvailable;
-    if (location) updateData.location = location;
 
-    // Find the user by the ID provided by the token and update them
-    const user = await User.findByIdAndUpdate(
+    // 2. Handle Volunteer-Specific Fields
+    if (userRole === 'Volunteer') {
+        if (isAvailable !== undefined) updateData.isAvailable = isAvailable;
+        if (location) updateData.location = location;
+
+        // If the volunteer is updating their skills, we MUST recalculate their category using Gemini
+        if (skills && Array.isArray(skills)) {
+            updateData.skills = skills;
+            let assignedCategory = 'Other'; // Default fallback
+
+            if (skills.length > 0) {
+                try {
+                    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                    const prompt = `
+                        Analyze the following list of skills provided by a disaster relief volunteer: ${skills.join(", ")}.
+                        Based on these skills, assign the volunteer to EXACTLY ONE of the following categories:
+                        'Medical', 'Rescue', 'Food & Water', 'Shelter', 'Sanitation', 'Labor', 'Transport', 'Supplies', 'Animal Rescue', 'Infrastructure', 'Other'.
+                        Respond with ONLY the category name. Do not include any extra text.
+                    `;
+
+                    const result = await model.generateContent(prompt);
+                    const responseText = result.response.text().trim();
+
+                    const validCategories = [
+                        'Medical', 'Rescue', 'Food & Water', 'Shelter', 
+                        'Sanitation', 'Labor', 'Transport', 'Supplies', 
+                        'Animal Rescue', 'Infrastructure', 'Other'
+                    ];
+
+                    if (validCategories.includes(responseText)) {
+                        assignedCategory = responseText;
+                    }
+                } catch (error) {
+                    console.error("Gemini API Error during update:", error);
+                    // If Gemini fails, it naturally falls back to 'Other'
+                }
+            }
+            
+            // Assign the new category to the update object
+            updateData.category = assignedCategory;
+        }
+    }
+
+    // 3. Find the user by the ID provided by the token and update them
+    const updatedUser = await User.findByIdAndUpdate(
         req.user?._id,
         { $set: updateData },
-        { new: true, runValidators: true } // 'new: true' returns the updated document, not the old one
+        { new: true, runValidators: true } // 'new: true' returns the updated document
     ).select("-password -refreshToken");
 
+    if (!updatedUser) {
+        throw new ApiError(404, "User not found");
+    }
+
+    // 4. Send response
     return res
         .status(200)
         .json(new ApiResponse(
             200, 
-            user, 
+            { user: updatedUser }, 
             "Account details updated successfully"
         ));
 });
@@ -229,28 +325,33 @@ const updateUserPassword = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Both old and new passwords are required");
     }
 
-    // 1. Find the user and explicitly request the password field
     const user = await User.findById(req.user?._id).select("+password");
 
-    // 2. Check if the old password matches
     const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
     if (!isPasswordCorrect) {
         throw new ApiError(400, "Invalid old password");
     }
 
-    // 3. Update the password
-    // CRITICAL: We MUST use user.save() here instead of findByIdAndUpdate.
-    // If we don't use .save(), our user.model.js pre("save") hook won't trigger,
-    // and the new password will be saved as plain text!
+    // Update password AND invalidate current session
     user.password = newPassword;
-    await user.save({ validateBeforeSave: false });
+    user.refreshToken = undefined; // Kills all active sessions using this token
+    
+    await user.save(); // Enforces schema validation (minlength: 6)
+
+    // Clear cookies on the client side to force them to log in again
+    const options = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production"
+    };
 
     return res
         .status(200)
+        .clearCookie("accessToken", options)
+        .clearCookie("refreshToken", options)
         .json(new ApiResponse(
             200, 
             {}, 
-            "Password updated successfully"
+            "Password updated successfully. Please log in again."
         ));
 });
 

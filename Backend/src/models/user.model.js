@@ -30,21 +30,28 @@ const userSchema = new mongoose.Schema({
   // --- Volunteer Specific Fields ---
   skills: { 
     type: [String], 
-    default: [] 
+  },
+  category: {
+    type: String,
+    required: function() { 
+        return this.role === 'Volunteer'; 
+    },
+    enum: [
+      'Medical', 'Rescue', 'Food & Water', 'Shelter', 
+      'Sanitation', 'Labor', 'Transport', 'Supplies', 
+      'Animal Rescue', 'Infrastructure', 'Other'
+    ]
   },
   isAvailable: { 
     type: Boolean, 
-    default: false 
   },
   location: {
     type: { 
       type: String, 
       enum: ['Point'], 
-      default: 'Point' 
     },
     coordinates: { 
       type: [Number], // MongoDB requires [Longitude, Latitude]
-      default: [0, 0] 
     }
   },
   refreshToken: {
@@ -54,7 +61,7 @@ const userSchema = new mongoose.Schema({
   timestamps: true // Automatically tracks createdAt and updatedAt
 });
 
-userSchema.index({ location: '2dsphere' });
+userSchema.index({ location: '2dsphere' }, { sparse: true });
 
 userSchema.pre("save",async function () {
     if(!this.isModified("password")) return ;
