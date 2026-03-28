@@ -73,4 +73,7 @@ const taskSchema = new Schema({
 
 taskSchema.index({ location: '2dsphere' });
 
+// This makes the dashboard sorting lightning fast
+taskSchema.index({ status: 1, severity: -1, createdAt: -1 });
+
 export const Task = mongoose.model('Task', taskSchema);

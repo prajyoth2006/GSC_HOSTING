@@ -126,6 +126,15 @@ const registerUser = asyncHandler(async (req, res) => {
 
     const createdUser = await User.findById(user._id).select("-password -refreshToken");
 
+    const io = req.app.get("io");
+    if (io) {
+        io.emit("newPersonnelJoined", {
+            fullName: user.fullName,
+            role: user.role,
+            createdAt: user.createdAt
+        });
+    }
+
     return res
         .status(201)
         .json(
@@ -258,34 +267,33 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 // ==========================================
 // 5. UPDATE ACCOUNT DETAILS
 // ==========================================
-const updateAccountDetails = asyncHandler(async (req, res) => {
-    const { name, skills, isAvailable, location } = req.body;
+ const updateAccountDetails = asyncHandler(async (req, res) => {
+    // 1. Get the data from the request body
+    const { name, email, skills, isAvailable, location } = req.body;
     
-    // The user's role should be available via the auth middleware (e.g., verifyJWT)
     const userRole = req.user?.role; 
-
-    // 1. Initialize the update object with fields applicable to ALL users
     const updateData = {};
-    if (name) updateData.name = name;
 
-    // 2. Handle Volunteer-Specific Fields
+    // 2. Add standard fields to the update object
+    if (name) updateData.name = name;
+    if (email) updateData.email = email;
+
+    // 3. Handle Volunteer-Specific Fields
     if (userRole === 'Volunteer') {
         if (isAvailable !== undefined) updateData.isAvailable = isAvailable;
         if (location) updateData.location = location;
 
-        // If the volunteer is updating their skills, we MUST recalculate their category using Gemini
         if (skills && Array.isArray(skills)) {
             updateData.skills = skills;
-            let assignedCategory = 'Other'; // Default fallback
+            let assignedCategory = 'Other'; 
 
             if (skills.length > 0) {
                 try {
                     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
                     const prompt = `
-                        Analyze the following list of skills provided by a disaster relief volunteer: ${skills.join(", ")}.
-                        Based on these skills, assign the volunteer to EXACTLY ONE of the following categories:
-                        'Medical', 'Rescue', 'Food & Water', 'Shelter', 'Sanitation', 'Labor', 'Transport', 'Supplies', 'Animal Rescue', 'Infrastructure', 'Other'.
-                        Respond with ONLY the category name. Do not include any extra text.
+                        Analyze the following skills: ${skills.join(", ")}.
+                        Assign EXACTLY ONE category: 'Medical', 'Rescue', 'Food & Water', 'Shelter', 'Sanitation', 'Labor', 'Transport', 'Supplies', 'Animal Rescue', 'Infrastructure', 'Other'.
+                        Respond with ONLY the category name.
                     `;
 
                     const result = await model.generateContent(prompt);
@@ -301,37 +309,46 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
                         assignedCategory = responseText;
                     }
                 } catch (error) {
-                    console.error("Gemini API Error during update:", error);
-                    // If Gemini fails, it naturally falls back to 'Other'
+                    console.error("Gemini API Error:", error);
                 }
             }
-            
-            // Assign the new category to the update object
             updateData.category = assignedCategory;
         }
     }
 
-    // 3. Find the user by the ID provided by the token and update them
+    // 4. Update the user in MongoDB
     const updatedUser = await User.findByIdAndUpdate(
         req.user?._id,
         { $set: updateData },
-        { new: true, runValidators: true } // 'new: true' returns the updated document
+        { new: true, runValidators: true } 
     ).select("-password -refreshToken");
 
     if (!updatedUser) {
         throw new ApiError(404, "User not found");
     }
 
-    // 4. Send response
-    return res
-        .status(200)
-        .json(new ApiResponse(
-            200, 
-            { user: updatedUser }, 
-            "Account details updated successfully"
-        ));
-});
+    // 🟢 --- REAL-TIME SOCKET UPDATE ---
+    const io = req.app.get("io");
+    if (io) {
+        // We use updatedUser.name here to ensure it matches your DB field
+        io.emit("userProfileUpdated", {
+            userId: updatedUser._id,
+            newDetails: { 
+                name: updatedUser.name, 
+                email: updatedUser.email,
+                isAvailable: updatedUser.isAvailable,
+                category: updatedUser.category 
+            }
+        });
+        console.log(`📡 Real-time update broadcasted for: ${updatedUser.name}`);
+    }
 
+    return res.status(200).json(new ApiResponse(
+        200, 
+        { user: updatedUser }, 
+        "Account details updated successfully"
+    ));
+});
 // ==========================================
 // 6. UPDATE PASSWORD
 // ==========================================

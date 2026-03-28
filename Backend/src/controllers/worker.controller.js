@@ -96,7 +96,6 @@ export const extractTaskFromImage = asyncHandler(async (req, res) => {
 
 // save the intialized task 
 export const saveTask = asyncHandler(async (req, res) => {
-    // 1. Destructure the exact fields the AI just gave us
     const { 
         title, 
         rawReportText, 
@@ -107,28 +106,36 @@ export const saveTask = asyncHandler(async (req, res) => {
         location 
     } = req.body;
 
-    // 2. Basic Validation: Ensure the critical fields aren't empty
     if (!title || !rawReportText || !category || !severity || !locationDescription) {
-        throw new ApiError(400, "Missing required fields. Please ensure the report is complete.");
+        throw new ApiError(400, "Missing required fields.");
     }
 
-    // 3. Create the new Task in MongoDB
     const newTask = await Task.create({
         title,
         rawReportText,
         category,
-        severity: Number(severity), // Ensure it saves as a number
+        severity: Number(severity),
         requiredSkills: requiredSkills || [],
         locationDescription,
         location: location || { type: "Point", coordinates: [0, 0] },
-        // IMPORTANT: We automatically link the logged-in Worker to this task!
         reportedBy: req.user._id, 
-        status: "Pending" // Default status
+        status: "Pending"
     });
 
-    // 4. Verify it was created and send success response
     if (!newTask) {
-        throw new ApiError(500, "Something went wrong while saving the task to the database");
+        throw new ApiError(500, "Failed to save the task.");
+    }
+
+    // 🟢 --- SOCKET.IO REAL-TIME NOTIFICATION ---
+    const io = req.app.get("io");
+    if (io) {
+        // We manually attach the reporter's name so the Admin dashboard looks better
+        const taskWithReporter = {
+            ...newTask._doc,
+            reporterName: req.user.fullName || "Field Worker" 
+        };
+        io.emit("newTaskCreated", taskWithReporter);
+        console.log("📡 Real-time alert sent: New Task Saved");
     }
 
     return res.status(201).json(
@@ -145,26 +152,20 @@ export const createTaskManually = asyncHandler(async (req, res) => {
         location 
     } = req.body;
 
-    // 1. Basic Text Validation
     if (!title || !rawReportText || !locationDescription) {
-        throw new ApiError(400, "Title, report text, and location description are required.");
+        throw new ApiError(400, "Required fields missing.");
     }
 
     try {
-        // --- 2. THE LOCATION GATEKEEPER ---
         let finalCoordinates = null;
 
-        // Check if user provided valid coordinates in the request
-        if (location?.coordinates && 
-            location.coordinates.length === 2 && 
-            (location.coordinates[0] !== 0 || location.coordinates[1] !== 0)) {
-            
+        // 1. Check if coordinates are already provided
+        if (location?.coordinates && location.coordinates.length === 2 && 
+           (location.coordinates[0] !== 0 || location.coordinates[1] !== 0)) {
             finalCoordinates = location.coordinates;
-            console.log("📍 Using user-provided coordinates.");
         } 
-        // If not, try Google Maps
         else {
-            console.log("🔍 Attempting to geocode address...");
+            // Geocoding logic
             try {
                 const apiKey = process.env.GOOGLE_MAPS_API_KEY;
                 const encodedAddress = encodeURIComponent(locationDescription);
@@ -176,61 +177,80 @@ export const createTaskManually = asyncHandler(async (req, res) => {
                 if (geoData.status === "OK" && geoData.results.length > 0) {
                     const { lat, lng } = geoData.results[0].geometry.location;
                     finalCoordinates = [lng, lat];
-                    console.log(`✅ Geocoding successful: [${lng}, ${lat}]`);
                 }
             } catch (geoError) {
-                console.error("❌ Google Maps API Error:", geoError.message);
+                console.error("Geocoding Error:", geoError.message);
             }
         }
 
-        // 🚨 THE CRITICAL CHECK: If we still don't have coordinates, STOP HERE.
         if (!finalCoordinates) {
-            throw new ApiError(400, "Location could not be determined. Please provide valid coordinates or a more specific address.");
+            throw new ApiError(400, "Location could not be determined. Please be more specific.");
         }
 
-        // --- 3. Gemini AI Analysis (Category, Skills, Severity) ---
+        // 2. Gemini AI Analysis
+        // Using 1.5-flash for stability
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
         const prompt = `
-            You are an expert emergency dispatcher. 
-            Analyze this report:
+            Analyze this disaster report and return ONLY a valid JSON object.
             Title: "${title}"
             Description: "${rawReportText}"
 
-            Return ONLY a valid JSON object:
+            JSON structure:
             {
-                "category": "Choose ONE: 'Medical', 'Rescue', 'Food & Water', 'Shelter', 'Sanitation', 'Labor', 'Transport', 'Supplies', 'Animal Rescue', 'Infrastructure', 'Other'",
-                "requiredSkills": ["List 2-4 skills"],
-                "severity": Integer 1-5 (5 is most urgent)
+                "category": "ONE OF: Medical, Rescue, Food & Water, Shelter, Sanitation, Labor, Transport, Supplies, Animal Rescue, Infrastructure, Other",
+                "requiredSkills": ["skill1", "skill2"],
+                "severity": 1-5
             }
         `;
 
         const result = await model.generateContent(prompt);
-        const cleanResponse = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
-        const aiAnalysis = JSON.parse(cleanResponse);
+        const responseText = result.response.text();
+        
+        // Robust JSON cleaning
+        const cleanResponse = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        
+        let aiAnalysis;
+        try {
+            aiAnalysis = JSON.parse(cleanResponse);
+        } catch (e) {
+            console.error("AI JSON Parse Error. Raw text was:", responseText);
+            // Fallback if AI messes up the format
+            aiAnalysis = { category: "Other", requiredSkills: [], severity: 3 };
+        }
 
-        // --- 4. Save to Database ---
+        // 3. Save to Database
         const newTask = await Task.create({
             title,
             rawReportText,
             locationDescription,
             category: aiAnalysis.category || "Other",
-            severity: aiAnalysis.severity || 3,
+            severity: Number(aiAnalysis.severity) || 3,
             requiredSkills: aiAnalysis.requiredSkills || [],
             location: { type: "Point", coordinates: finalCoordinates },
             reportedBy: req.user._id, 
             status: "Pending"
         });
 
+        // 🟢 --- UPDATED SOCKET LOGIC ---
+        const io = req.app.get("io");
+        if (io) {
+            const taskWithReporter = {
+                ...newTask.toObject(), // Use toObject() instead of ._doc for safety
+                reporterName: req.user.name || "Field Worker" // Fixed: Uses .name
+            };
+            io.emit("newTaskCreated", taskWithReporter);
+            console.log(`📡 Broadcasted new task reported by ${req.user.name}`);
+        }
+
         return res.status(201).json(
-            new ApiResponse(201, newTask, "Task created successfully with AI analysis.")
+            new ApiResponse(201, newTask, "Task created successfully!")
         );
 
     } catch (error) {
-        // Handle specific ApiErrors (like our location check) differently than general crashes
-        if (error instanceof ApiError) throw error;
+        // Log the actual error to your console so you can see it!
+        console.error("CRITICAL TASK ERROR:", error);
 
-        console.error("Task Creation Error:", error);
-        throw new ApiError(500, "Internal Server Error while creating task.");
+        if (error instanceof ApiError) throw error;
+        throw new ApiError(500, error.message || "Internal Server Error during task creation.");
     }
 });

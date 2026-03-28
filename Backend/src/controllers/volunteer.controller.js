@@ -4,146 +4,153 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Task } from "../models/task.model.js";
 
-// location availablty
+// 1. TOGGLE AVAILABILITY (Upgraded with Socket)
 export const toggleAvailability = asyncHandler(async (req, res) => {
+    // 1. Get the new status from the button press (true or false)
     const { isAvailable, coordinates } = req.body;
 
     if (typeof isAvailable !== "boolean") {
-        throw new ApiError(400, "Please provide a valid true/false status");
+        throw new ApiError(400, "Invalid availability status.");
     }
 
     let updateFields = { isAvailable };
 
+    // 2. If they are turning the button ON, we need their GPS
     if (isAvailable) {
-        // Validation: Must have coordinates to go online
-        if (!coordinates || !Array.isArray(coordinates) || coordinates.length !== 2) {
-            throw new ApiError(400, "GPS coordinates are required to go online.");
+        if (!coordinates || coordinates.length !== 2) {
+            throw new ApiError(400, "GPS location is required to go online.");
         }
-
-        // GIS Validation: Ensure numbers are within global bounds
-        const [lng, lat] = coordinates;
-        if (lng < -180 || lng > 180 || lat < -90 || lat > 90) {
-            throw new ApiError(400, "Invalid GPS coordinates provided.");
-        }
-
-        updateFields.location = { type: "Point", coordinates: [lng, lat] };
-    } else {
-        // Optional: If offline, we might want to keep the last known location
-        // or set it to null so they disappear from "Live Maps" entirely.
-        // updateFields.location = null; 
+        updateFields.location = { 
+            type: "Point", 
+            coordinates: [coordinates[0], coordinates[1]] // [lng, lat]
+        };
     }
 
+    // 3. Update the database
     const updatedUser = await User.findByIdAndUpdate(
         req.user._id,
         { $set: updateFields },
         { new: true, select: "-password" }
     );
 
+    // 🟢 --- THE REAL-TIME SYNC ---
+    // This tells the Admin Dashboard to move this user from "Offline" to "Online" 
+    // or vice-versa the moment the button is pressed.
+    const io = req.app.get("io");
+    if (io) {
+        io.emit("volunteerStatusChanged", {
+            userId: updatedUser._id,
+            fullName: updatedUser.fullName,
+            isAvailable: updatedUser.isAvailable,
+            location: updatedUser.location,
+            skills: updatedUser.skills // Helpful for the Admin to see who just became available
+        });
+    }
+
     return res.status(200).json(
-        new ApiResponse(200, updatedUser, isAvailable ? "Online" : "Offline")
+        new ApiResponse(200, updatedUser, `Status manually set to ${isAvailable ? "Available" : "Unavailable"}`)
     );
 });
 
-// get assigned tasks for the volunteer
+// 2. GET ASSIGNED TASKS (No Socket needed - Read only)
 export const getAssignedTasks = asyncHandler(async (req, res) => {
-    // Search the database for any task where this user's ID is the assigned volunteer
     const tasks = await Task.find({ assignedVolunteer: req.user._id })
-        .sort({ createdAt: -1 }); // Sort by newest first
+        .sort({ createdAt: -1 });
 
     const message = tasks.length > 0 
         ? "Assigned tasks fetched successfully" 
-        : "You currently have no active assignments. Stand by.";
+        : "You currently have no active assignments.";
 
     return res.status(200).json(
         new ApiResponse(200, tasks, message)
     );
 });
 
-// update task status
+// 3. UPDATE TASK STATUS (Upgraded with Socket)
 export const updateTaskStatus = asyncHandler(async (req, res) => {
-    // 1. Get the Task ID from the URL and the new status from the body
     const { taskId } = req.params;
     const { status } = req.body;
 
-    // 2. Security Check: Volunteers should only be able to set these two statuses
     const allowedStatuses = ["In Progress", "Completed"];
     if (!allowedStatuses.includes(status)) {
-        throw new ApiError(400, "Invalid status. Volunteers can only set status to 'In Progress' or 'Completed'.");
+        throw new ApiError(400, "Invalid status.");
     }
 
-    // 3. Find the task. CRITICAL: We also check `assignedVolunteer: req.user._id` 
-    // to ensure a volunteer cannot hack the URL and close someone else's task!
     const task = await Task.findOne({
         _id: taskId,
         assignedVolunteer: req.user._id
     });
 
     if (!task) {
-        throw new ApiError(404, "Task not found, or you are not authorized to update this task.");
+        throw new ApiError(404, "Task not found or unauthorized.");
     }
 
-    // 4. Update the status and save it
     task.status = status;
     await task.save();
 
-    // 5. Send success response back to the frontend
+    // 🟢 SOCKET: Alert Admin that a task has moved from 'Assigned' to 'In Progress' or 'Completed'
+    const io = req.app.get("io");
+    if (io) {
+        io.emit("taskStatusUpdated", {
+            taskId: task._id,
+            newStatus: status,
+            volunteerName: req.user.fullName
+        });
+    }
+
     return res.status(200).json(
-        new ApiResponse(200, task, `Mission status successfully updated to: ${status}`)
+        new ApiResponse(200, task, `Status updated to: ${status}`)
     );
 });
 
-//volunteers history
+// 4. GET VOLUNTEER HISTORY (No Socket needed)
 export const getVolunteerHistory = asyncHandler(async (req, res) => {
-    // Search for tasks assigned to this user that are ONLY marked as "Completed"
     const completedTasks = await Task.find({ 
         assignedVolunteer: req.user._id,
         status: "Completed" 
-    }).sort({ updatedAt: -1 }); // Sort by most recently completed
-
-    const message = completedTasks.length > 0 
-        ? `You have successfully completed ${completedTasks.length} missions!` 
-        : "You haven't completed any missions yet. Your history will appear here.";
+    }).sort({ updatedAt: -1 });
 
     return res.status(200).json(
-        new ApiResponse(200, completedTasks, message)
+        new ApiResponse(200, completedTasks, "History fetched.")
     );
 });
 
-// ADD A FIELD NOTE / CLOSING REPORT
+// 5. ADD COMPLETION NOTE (Upgraded with Socket)
 export const addCompletionNote = asyncHandler(async (req, res) => {
     const { taskId } = req.params;
     const { note } = req.body;
 
     if (!note || note.trim() === "") {
-        throw new ApiError(400, "Please provide a note to save.");
+        throw new ApiError(400, "Please provide a note.");
     }
 
-    // 1. Find the task assigned to this exact volunteer
     const task = await Task.findOne({
         _id: taskId,
         assignedVolunteer: req.user._id
     });
 
-    // 2. Check if the task exists and belongs to them
-    if (!task) {
-        throw new ApiError(404, "Task not found or you are not authorized to add a note to it.");
+    if (!task || task.status !== "Completed") {
+        throw new ApiError(400, "Unauthorized or task not completed.");
     }
 
-    // 3. THE FIX: Check if the task is actually completed!
-    if (task.status !== "Completed") {
-        throw new ApiError(400, "You can only add a closing note to a task after it has been marked as 'Completed'.");
-    }
-
-    // 4. Add the note and save
     task.completionNote = note;
     await task.save();
 
+    // 🟢 SOCKET: Send the final closing note to Admin dashboard instantly
+    const io = req.app.get("io");
+    if (io) {
+        io.emit("taskNoteAdded", {
+            taskId: task._id,
+            completionNote: note
+        });
+    }
+
     return res.status(200).json(
-        new ApiResponse(200, task, "Field note successfully added to the task.")
+        new ApiResponse(200, task, "Note added.")
     );
 });
 
-// SOS / ESCALATE TASK
+// 6. SOS / ESCALATE TASK (Critical Upgrade with Socket)
 export const escalateTask = asyncHandler(async (req, res) => {
     const { taskId } = req.params;
     const { reason } = req.body;
@@ -154,21 +161,29 @@ export const escalateTask = asyncHandler(async (req, res) => {
     });
 
     if (!task) throw new ApiError(404, "Task not found or unauthorized.");
-    if (task.status === "Completed") throw new ApiError(400, "Cannot escalate a finished task.");
+    if (task.status === "Completed") throw new ApiError(400, "Cannot escalate completed task.");
 
-    // Resetting for the next volunteer
     task.status = "Pending";
     task.severity = 5; 
     task.assignedVolunteer = null; 
 
-    // Use a specific field for escalation notes if you have it, 
-    // otherwise, your prepending method is fine but let's make it cleaner:
     const timestamp = new Date().toLocaleString();
     task.rawReportText += `\n\n[🚨 ESCALATED ${timestamp}]: ${reason || "No reason provided"}`;
 
     await task.save();
 
+    // 🟢 SOCKET: THE MOST CRITICAL ALERT
+    // Moves the task back to the 'Pending' queue with max severity instantly
+    const io = req.app.get("io");
+    if (io) {
+        io.emit("taskEscalated", {
+            task: task,
+            reason: reason,
+            volunteerName: req.user.fullName
+        });
+    }
+
     return res.status(200).json(
-        new ApiResponse(200, task, "Task escalated to Admin.")
+        new ApiResponse(200, task, "Escalated successfully.")
     );
 });
