@@ -67,16 +67,23 @@ const registerUser = asyncHandler(async (req, res) => {
 
         if (skills && skills.length > 0) {
             try {
-                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
                 const prompt = `
-                    Analyze the following list of skills provided by a disaster relief volunteer: ${skills.join(", ")}.
-                    Based on these skills, assign the volunteer to EXACTLY ONE of the following categories:
-                    'Medical', 'Rescue', 'Food & Water', 'Shelter', 'Sanitation', 'Labor', 'Transport', 'Supplies', 'Animal Rescue', 'Infrastructure', 'Other'.
-                    Respond with ONLY the category name. Do not include any extra text.
+                    Analyze these disaster relief volunteer skills: ${skills.join(", ")}.
+                    Assign EXACTLY ONE category from this list: Medical, Rescue, Food & Water, Shelter, Sanitation, Labor, Transport, Supplies, Animal Rescue, Infrastructure, Other.
+                    Reply with ONLY the exact category name. NO punctuation, NO markdown, NO extra words.
                 `;
 
                 const result = await model.generateContent(prompt);
-                const responseText = result.response.text().trim();
+                
+                // 1. Get the raw text
+                const rawResponse = result.response.text();
+                
+                // 🛠️ DEBUGGING: This will print exactly what Gemini sends back to your terminal!
+                console.log("🤖 Gemini Raw Response ->", rawResponse); 
+
+                // 2. Clean the response: Remove markdown (*), periods (.), newlines (\n), and trim spaces, then make lowercase
+                const cleanResponse = rawResponse.replace(/[*.\n]/g, '').trim().toLowerCase();
 
                 const validCategories = [
                     'Medical', 'Rescue', 'Food & Water', 'Shelter', 
@@ -84,11 +91,21 @@ const registerUser = asyncHandler(async (req, res) => {
                     'Animal Rescue', 'Infrastructure', 'Other'
                 ];
 
-                if (validCategories.includes(responseText)) {
-                    assignedCategory = responseText;
+                // 3. Do a case-insensitive search to find the matching category
+                const matchedCategory = validCategories.find(
+                    (category) => category.toLowerCase() === cleanResponse
+                );
+
+                if (matchedCategory) {
+                    assignedCategory = matchedCategory;
+                    console.log(`✅ Success: Assigned category '${assignedCategory}'`);
+                } else {
+                    console.log(`⚠️ Warning: Cleaned response '${cleanResponse}' did not match any category. Defaulting to 'Other'.`);
                 }
+                
             } catch (error) {
-                console.error("Gemini API Error:", error);
+                // 🚨 If you see this in your terminal, your API Key is likely invalid or missing!
+                console.error("❌ Gemini API Error:", error.message);
                 // assignedCategory naturally falls back to 'Other'
             }
         }
