@@ -16,7 +16,7 @@ export const getSystemDashboard = asyncHandler(async (req, res) => {
         totalWorkers,        
         criticalTasks,       
         categoryBreakdownRaw,
-        allTasksSorted
+        allTasksSortedRaw // Changed name here to represent raw data
     ] = await Promise.all([
         Task.countDocuments({ status: "Pending" }),
         Task.countDocuments({ status: "In Progress" }),
@@ -62,6 +62,12 @@ export const getSystemDashboard = asyncHandler(async (req, res) => {
         ])
     ]);
 
+    // 2. NEW STEP: Populate the human names into the aggregated tasks
+    const allTasksSorted = await Task.populate(allTasksSortedRaw, [
+        { path: "reportedBy", select: "name" },
+        { path: "assignedVolunteer", select: "name" }
+    ]);
+
     const activeCategories = {};
     categoryBreakdownRaw.forEach(cat => {
         if (cat._id) activeCategories[cat._id] = cat.count;
@@ -86,7 +92,7 @@ export const getSystemDashboard = asyncHandler(async (req, res) => {
                 totalWorkers: totalWorkers
             }
         },
-        taskList: allTasksSorted 
+        taskList: allTasksSorted // Now contains populated names!
     };
 
     const io = req.app.get("io");
