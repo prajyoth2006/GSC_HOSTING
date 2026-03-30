@@ -55,25 +55,47 @@ export const extractTaskFromImage = asyncHandler(async (req, res) => {
 
         if (addressToSearch) {
             try {
-                const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-                const encodedAddress = encodeURIComponent(addressToSearch);
-                const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${apiKey}`;
-                
-                const geoResponse = await fetch(geocodeUrl);
-                const geoData = await geoResponse.json();
+                const apiKey = process.env.GEMINI_API_KEY; // Ensure your .env has this key
 
-                console.log(`🔍 Geocoding address: "${addressToSearch}"`);
-                console.log("Google Maps Geocoding Response:", geoData);    
+                // 1. Create a strict prompt asking for JSON only
+                const promptText = `Find the precise latitude and longitude for the following location: "${locationDescription}". 
+    Return a JSON object with exactly two keys: 'lat' and 'lng', containing the numeric values. Do not include any other text.`;
 
-                if (geoData.status === "OK" && geoData.results.length > 0) {
-                    const { lat, lng } = geoData.results[0].geometry.location;
-                    extractedData.location.coordinates = [lng, lat];
-                    console.log(`✅ Geocoding successful for "${addressToSearch}": [${lng}, ${lat}]`);
-                } else {
-                    console.warn(`⚠️ Google Maps could not find coordinates for: "${addressToSearch}". Defaulting to [0,0].`);
+                const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
+                // 2. Send the request to Gemini
+                const geminiResponse = await fetch(geminiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{ text: promptText }]
+                        }],
+                        generationConfig: {
+                            responseMimeType: "application/json", // Forces clean JSON output
+                            temperature: 0.1 // Low temperature for factual, deterministic responses
+                        }
+                    })
+                });
+
+                const geminiData = await geminiResponse.json();
+
+                // 3. Extract and parse the response
+                if (geminiData.candidates && geminiData.candidates.length > 0) {
+                    const responseText = geminiData.candidates[0].content.parts[0].text;
+                    const { lat, lng } = JSON.parse(responseText);
+
+                    if (lat && lng) {
+                        // Maintains the [longitude, latitude] array order, which is standard for GeoJSON in databases like MongoDB
+                        finalCoordinates = [lng, lat];
+                    } else {
+                        console.warn("Gemini could not determine coordinates for:", locationDescription);
+                    }
                 }
-            } catch (geoError) {
-                console.error("❌ Google Maps API Error:", geoError.message);
+            } catch (error) {
+                console.error("Gemini Geocoding Error:", error.message);
             }
         }
 
@@ -96,14 +118,14 @@ export const extractTaskFromImage = asyncHandler(async (req, res) => {
 
 // save the intialized task 
 export const saveTask = asyncHandler(async (req, res) => {
-    const { 
-        title, 
-        rawReportText, 
-        category, 
-        severity, 
-        requiredSkills, 
-        locationDescription, 
-        location 
+    const {
+        title,
+        rawReportText,
+        category,
+        severity,
+        requiredSkills,
+        locationDescription,
+        location
     } = req.body;
 
     if (!title || !rawReportText || !category || !severity || !locationDescription) {
@@ -118,7 +140,7 @@ export const saveTask = asyncHandler(async (req, res) => {
         requiredSkills: requiredSkills || [],
         locationDescription,
         location: location || { type: "Point", coordinates: [0, 0] },
-        reportedBy: req.user._id, 
+        reportedBy: req.user._id,
         status: "Pending"
     });
 
@@ -132,7 +154,7 @@ export const saveTask = asyncHandler(async (req, res) => {
         // We manually attach the reporter's name so the Admin dashboard looks better
         const taskWithReporter = {
             ...newTask._doc,
-            reporterName: req.user.fullName || "Field Worker" 
+            reporterName: req.user.fullName || "Field Worker"
         };
         io.emit("newTaskCreated", taskWithReporter);
         console.log("📡 Real-time alert sent: New Task Saved");
@@ -145,11 +167,11 @@ export const saveTask = asyncHandler(async (req, res) => {
 
 // CREATE TASK MANUALLY (AI AUTO-TAGGING & GEOCODING)
 export const createTaskManually = asyncHandler(async (req, res) => {
-    const { 
-        title, 
-        rawReportText, 
-        locationDescription, 
-        location 
+    const {
+        title,
+        rawReportText,
+        locationDescription,
+        location
     } = req.body;
 
     if (!title || !rawReportText || !locationDescription) {
@@ -160,26 +182,54 @@ export const createTaskManually = asyncHandler(async (req, res) => {
         let finalCoordinates = null;
 
         // 1. Check if coordinates are already provided
-        if (location?.coordinates && location.coordinates.length === 2 && 
-           (location.coordinates[0] !== 0 || location.coordinates[1] !== 0)) {
+        if (location?.coordinates && location.coordinates.length === 2 &&
+            (location.coordinates[0] !== 0 || location.coordinates[1] !== 0)) {
             finalCoordinates = location.coordinates;
-        } 
+        }
         else {
             // Geocoding logic
             try {
-                const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-                const encodedAddress = encodeURIComponent(locationDescription);
-                const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${apiKey}`;
-                
-                const geoResponse = await fetch(geocodeUrl);
-                const geoData = await geoResponse.json();
+                const apiKey = process.env.GEMINI_API_KEY; // Ensure your .env has this key
 
-                if (geoData.status === "OK" && geoData.results.length > 0) {
-                    const { lat, lng } = geoData.results[0].geometry.location;
-                    finalCoordinates = [lng, lat];
+                // 1. Create a strict prompt asking for JSON only
+                const promptText = `Find the precise latitude and longitude for the following location: "${locationDescription}". 
+    Return a JSON object with exactly two keys: 'lat' and 'lng', containing the numeric values. Do not include any other text.`;
+
+                const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
+                // 2. Send the request to Gemini
+                const geminiResponse = await fetch(geminiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{ text: promptText }]
+                        }],
+                        generationConfig: {
+                            responseMimeType: "application/json", // Forces clean JSON output
+                            temperature: 0.1 // Low temperature for factual, deterministic responses
+                        }
+                    })
+                });
+
+                const geminiData = await geminiResponse.json();
+
+                // 3. Extract and parse the response
+                if (geminiData.candidates && geminiData.candidates.length > 0) {
+                    const responseText = geminiData.candidates[0].content.parts[0].text;
+                    const { lat, lng } = JSON.parse(responseText);
+
+                    if (lat && lng) {
+                        // Maintains the [longitude, latitude] array order, which is standard for GeoJSON in databases like MongoDB
+                        finalCoordinates = [lng, lat];
+                    } else {
+                        console.warn("Gemini could not determine coordinates for:", locationDescription);
+                    }
                 }
-            } catch (geoError) {
-                console.error("Geocoding Error:", geoError.message);
+            } catch (error) {
+                console.error("Gemini Geocoding Error:", error.message);
             }
         }
 
@@ -188,7 +238,6 @@ export const createTaskManually = asyncHandler(async (req, res) => {
         }
 
         // 2. Gemini AI Analysis
-        // Using 1.5-flash for stability
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
         const prompt = `
             Analyze this disaster report and return ONLY a valid JSON object.
@@ -205,10 +254,10 @@ export const createTaskManually = asyncHandler(async (req, res) => {
 
         const result = await model.generateContent(prompt);
         const responseText = result.response.text();
-        
+
         // Robust JSON cleaning
         const cleanResponse = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-        
+
         let aiAnalysis;
         try {
             aiAnalysis = JSON.parse(cleanResponse);
@@ -227,7 +276,7 @@ export const createTaskManually = asyncHandler(async (req, res) => {
             severity: Number(aiAnalysis.severity) || 3,
             requiredSkills: aiAnalysis.requiredSkills || [],
             location: { type: "Point", coordinates: finalCoordinates },
-            reportedBy: req.user._id, 
+            reportedBy: req.user._id,
             status: "Pending"
         });
 
