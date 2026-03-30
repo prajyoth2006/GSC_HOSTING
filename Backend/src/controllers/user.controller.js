@@ -68,43 +68,52 @@ const registerUser = asyncHandler(async (req, res) => {
         if (skills && skills.length > 0) {
             try {
                 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+                
+                // IMPORTANT: Put longer/compound phrases first. 
+                // This ensures "Animal Rescue" is matched before the parser just sees "Rescue".
+                const validCategories = [
+                    'Animal Rescue', 'Food & Water', 'Infrastructure', 
+                    'Sanitation', 'Transport', 'Supplies', 'Medical', 
+                    'Shelter', 'Rescue', 'Labor', 'Other'
+                ];
+
+                // 1. Stricter Prompt with prioritization rules
+                // 1. Bulletproof Prompt
                 const prompt = `
                     Analyze these disaster relief volunteer skills: ${skills.join(", ")}.
-                    Assign EXACTLY ONE category from this list: Medical, Rescue, Food & Water, Shelter, Sanitation, Labor, Transport, Supplies, Animal Rescue, Infrastructure, Other.
-                    Reply with ONLY the exact category name. NO punctuation, NO markdown, NO extra words.
+                    Assign EXACTLY ONE category from this list: ${validCategories.join(", ")}.
+                    
+                    CRITICAL RULES:
+                    1. Even if the user has multiple skills, you MUST CHOOSE ONLY ONE category.
+                    2. NEVER combine categories (e.g., do not say "Medical and Labor").
+                    3. NEVER list multiple categories.
+                    4. Prioritize specialized skills (Medical, Rescue, Animal Rescue) over general skills (Labor, Other).
+                    5. Output ONLY the exact category name. NO punctuation, NO extra words.
                 `;
 
                 const result = await model.generateContent(prompt);
                 
-                // 1. Get the raw text
+                // 2. Get the raw text
                 const rawResponse = result.response.text();
-                
-                // 🛠️ DEBUGGING: This will print exactly what Gemini sends back to your terminal!
                 console.log("🤖 Gemini Raw Response ->", rawResponse); 
 
-                // 2. Clean the response: Remove markdown (*), periods (.), newlines (\n), and trim spaces, then make lowercase
-                const cleanResponse = rawResponse.replace(/[*.\n]/g, '').trim().toLowerCase();
+                // 3. Clean the response: Just make it lowercase to search
+                const cleanResponse = rawResponse.toLowerCase();
 
-                const validCategories = [
-                    'Medical', 'Rescue', 'Food & Water', 'Shelter', 
-                    'Sanitation', 'Labor', 'Transport', 'Supplies', 
-                    'Animal Rescue', 'Infrastructure', 'Other'
-                ];
-
-                // 3. Do a case-insensitive search to find the matching category
+                // 4. Smarter Parsing: Check if the AI's response INCLUDES a valid category
+                // rather than requiring a perfect, exact match.
                 const matchedCategory = validCategories.find(
-                    (category) => category.toLowerCase() === cleanResponse
+                    (category) => cleanResponse.includes(category.toLowerCase())
                 );
 
                 if (matchedCategory) {
                     assignedCategory = matchedCategory;
                     console.log(`✅ Success: Assigned category '${assignedCategory}'`);
                 } else {
-                    console.log(`⚠️ Warning: Cleaned response '${cleanResponse}' did not match any category. Defaulting to 'Other'.`);
+                    console.log(`⚠️ Warning: Cleaned response '${cleanResponse}' did not contain any valid category. Defaulting to 'Other'.`);
                 }
                 
             } catch (error) {
-                // 🚨 If you see this in your terminal, your API Key is likely invalid or missing!
                 console.error("❌ Gemini API Error:", error.message);
                 // assignedCategory naturally falls back to 'Other'
             }
@@ -113,6 +122,8 @@ const registerUser = asyncHandler(async (req, res) => {
         // Attach volunteer-specific data
         userData.skills = skills || [];
         userData.category = assignedCategory;
+        
+        // Ensure location safely defaults to a GeoJSON Point if none is provided
         userData.location = location || { type: 'Point', coordinates: [0, 0] };
         userData.isAvailable = true; // Volunteers start as available by default
     }
