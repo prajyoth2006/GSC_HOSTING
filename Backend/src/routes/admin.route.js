@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { authorizeRoles } from "../middlewares/role.middleware.js";
-import { getSystemDashboard , getUsersByRole, getUserProfileWithDetails} from "../controllers/admin.controller.js";
+import { getSystemDashboard , getUsersByRole, getUserProfileWithDetails, cancelTask, updateTaskDetails} from "../controllers/admin.controller.js";
 
 const router = Router();
 
@@ -25,6 +25,11 @@ router.route("/users").get(getUsersByRole)
 // GET: /api/v1/admin/users/userID...
 router.route("/users/:userId").get(getUserProfileWithDetails);
 
+//cancel task
+router.route("/tasks/:taskId/cancel").patch(cancelTask);
+
+// PATCH: /api/v1/admin/tasks/:taskId/update
+router.route("/tasks/:taskId/update").patch(updateTaskDetails);
 
 
 export default router;

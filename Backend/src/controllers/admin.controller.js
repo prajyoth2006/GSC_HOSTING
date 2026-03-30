@@ -195,3 +195,103 @@ export const getUserProfileWithDetails = asyncHandler(async (req, res) => {
     );
 });
 
+// ==========================================
+// ADMIN: CANCEL A TASK (False Alarms / Duplicates)
+// ==========================================
+export const cancelTask = asyncHandler(async (req, res) => {
+    const { taskId } = req.params;
+    const { reason } = req.body; // Optional: Why was it cancelled?
+
+    // 1. Find the task
+    const task = await Task.findById(taskId);
+
+    if (!task) {
+        throw new ApiError(404, "Task not found.");
+    }
+
+    // 2. Prevent cancelling if already finished
+    if (task.status === "Completed") {
+        throw new ApiError(400, "Cannot cancel a task that is already completed.");
+    }
+
+    // 3. Update status and add a note
+    task.status = "Cancelled";
+    if (reason) {
+        task.completionNote = `[CANCELLED BY ADMIN]: ${reason}`;
+    }
+
+    // If there was a volunteer assigned, we should unassign them too
+    task.assignedVolunteer = null;
+
+    await task.save();
+
+    // 🟢 --- SOCKET.IO REAL-TIME REMOVAL ---
+    const io = req.app.get("io");
+    if (io) {
+        // We tell the frontend exactly which ID to remove from the list
+        io.emit("taskCancelled", {
+            taskId: task._id,
+            title: task.title,
+            cancelledBy: req.user.name 
+        });
+        console.log(`📡 Task ${taskId} cancelled and broadcasted.`);
+    }
+
+    return res.status(200).json(
+        new ApiResponse(200, task, "Task has been successfully cancelled and removed from active lists.")
+    );
+});
+
+// ==========================================
+// ADMIN: MANUAL TASK CORRECTION (Edit Task)
+// ==========================================
+export const updateTaskDetails = asyncHandler(async (req, res) => {
+    const { taskId } = req.params;
+    
+    // 1. Get the fields the Admin wants to fix
+    const { 
+        title, 
+        category, 
+        severity, 
+        locationDescription, 
+        requiredSkills 
+    } = req.body;
+
+    // 2. Find the task in the database
+    const task = await Task.findById(taskId);
+
+    if (!task) {
+        throw new ApiError(404, "Task not found in the system.");
+    }
+
+    // 3. Update only the fields that were actually sent in the request
+    if (title) task.title = title;
+    if (category) task.category = category;
+    if (severity) task.severity = Number(severity);
+    if (locationDescription) task.locationDescription = locationDescription;
+    if (requiredSkills) task.requiredSkills = requiredSkills;
+
+    // 4. Save the corrected task
+    await task.save();
+
+    // 🟢 --- SOCKET.IO REAL-TIME UPDATE ---
+    const io = req.app.get("io");
+    if (io) {
+        // We broadcast the updated task so ALL Admin dashboards 
+        // update the UI instantly without a refresh.
+        io.emit("taskUpdatedByAdmin", {
+            taskId: task._id,
+            updatedData: { 
+                title: task.title, 
+                category: task.category, 
+                severity: task.severity 
+            },
+            adminName: req.user.name // Using .name as per your model
+        });
+        console.log(`📡 Task ${taskId} corrected by ${req.user.name}`);
+    }
+
+    return res.status(200).json(
+        new ApiResponse(200, task, "Task details have been manually corrected by Admin.")
+    );
+});
