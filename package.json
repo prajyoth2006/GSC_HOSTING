@@ -1,0 +1,21 @@
+{
+  "name": "gsc-2026",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+  "start:frontend": "cd Frontend && npm run dev",
+  "start:backend": "cd Backend && npm run dev",
+  "start": "concurrently \"npm run start:backend\" \"npm run start:frontend\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prajyoth2006/google-solution-challenge.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/prajyoth2006/google-solution-challenge/issues"
+  },
+  "homepage": "https://github.com/prajyoth2006/google-solution-challenge#readme"
+}
