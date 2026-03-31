@@ -21,6 +21,9 @@ import UpdateDetails from './pages/UpdateDetails';
 import UpdatePassword from './pages/UpdatePassword';
 import TasksListView from './pages/TasksListView';
 
+// NEW: Import the Create Task page
+import CreateTaskByAdmin from './pages/CreateTaskByAdmin'; 
+
 // --- Protected Route Wrapper ---
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoading } = useAuth();
@@ -65,13 +68,16 @@ export default function App() {
               >
                 {/* 1. Dashboard now lives at /home to avoid conflict with Landing Page */}
                 <Route path="/home" element={<DashboardView />} />
-                <Route path="/operations" element={<TasksListView />} />
                 
-                {/* 2. User Directory and Profile (Path fixed to /directory/:userId) */}
+                {/* 2. Task / Operations Management */}
+                <Route path="/operations" element={<TasksListView />} />
+                <Route path="/operations/create" element={<CreateTaskByAdmin />} />
+                
+                {/* 3. User Directory and Profile */}
                 <Route path="/directory" element={<UserDirectory />} />
                 <Route path="/directory/:userId" element={<UserProfileView />} />
                 
-                {/* 3. Account Settings */}
+                {/* 4. Account Settings */}
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/update-details" element={<UpdateDetails />} />
                 <Route path="/update-password" element={<UpdatePassword />} />

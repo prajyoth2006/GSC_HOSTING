@@ -1,13 +1,21 @@
 import { Card, CardContent } from "@/components/ui/card"
+import { useNavigate } from 'react-router-dom';
+
 import { 
   ShieldAlert, MapPin, Search, Filter, ArrowUpDown, 
   ClipboardList, AlertCircle, User, UserCheck, 
   Wrench, X, Clock, Navigation, MoreVertical, 
-  Edit, Trash2, Save
+  Edit, Trash2, Save, Plus
 } from "lucide-react"
 import { useEffect, useState, useMemo } from "react"
 
-// 1. Updated Interface to handle Populated User Objects
+// Exact categories matching your backend schema
+const TASK_CATEGORIES = [
+  'Medical', 'Rescue', 'Food & Water', 'Shelter', 
+  'Sanitation', 'Labor', 'Transport', 'Supplies', 
+  'Animal Rescue', 'Infrastructure', 'Other'
+];
+
 interface TaskUser {
   _id: string;
   name: string;
@@ -23,14 +31,15 @@ interface Task {
   locationDescription: string;
   location: { type: string; coordinates: number[] };
   requiredSkills: string[];
-  reportedBy: TaskUser | string; // Can be a populated object OR a string ID
-  assignedVolunteer: TaskUser | string | null; // Can be a populated object OR a string ID
+  reportedBy: TaskUser | string; 
+  assignedVolunteer: TaskUser | string | null; 
   completionNote?: string;
   createdAt: string;
   updatedAt: string;
 }
 
 export default function TasksListView() {
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -134,22 +143,30 @@ export default function TasksListView() {
     return <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${styles[status] || 'bg-slate-50'}`}>{status}</span>;
   };
 
-  // 2. Smart Helper Function to Extract Exact Names
   const formatName = (userField: TaskUser | string | null, fallbackStr: string) => {
     if (!userField) return fallbackStr;
-    // If the backend populated the user object, return their exact name
     if (typeof userField === 'object' && userField.name) return userField.name;
-    // If backend only sent the ID, return the ID with a prefix
     return `User ID: ${userField}`; 
   };
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-20 select-none">
+      
+      {/* UPGRADE 1: Added Create Task Button to the Header */}
       <div className="flex justify-between items-end border-b border-slate-200 pb-4">
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">Operational Log</h2>
           <p className="text-slate-500 text-sm font-medium italic">VolunMatch Master Records</p>
         </div>
+        
+        {/* Note: Swap window.location with React Router's useNavigate or Next's useRouter if preferred */}
+        <button 
+          onClick={() => navigate('/operations/create')}
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm shadow-blue-600/20"
+        >
+          <Plus className="h-5 w-5" />
+          Create Task
+        </button>
       </div>
 
       <Card className="bg-white border-slate-200 shadow-sm">
@@ -282,6 +299,25 @@ export default function TasksListView() {
 
             <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
               
+              {/* UPGRADE 2: Made the Completion/Cancellation Note visible right at the top if it exists */}
+              {(selectedTask.status === 'Cancelled' || selectedTask.status === 'Completed') && (
+                <section className="animate-in slide-in-from-top-4 duration-500">
+                   <div className={`p-6 rounded-[2rem] border ${selectedTask.status === 'Cancelled' ? 'bg-red-50/80 border-red-200' : 'bg-emerald-50/80 border-emerald-200'}`}>
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className={`p-2 rounded-lg ${selectedTask.status === 'Cancelled' ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'}`}>
+                          <AlertCircle className="h-4 w-4" />
+                        </div>
+                        <h4 className={`text-sm font-black uppercase tracking-widest ${selectedTask.status === 'Cancelled' ? 'text-red-900' : 'text-emerald-900'}`}>
+                          Final Resolution Summary
+                        </h4>
+                      </div>
+                      <p className="text-base font-bold text-slate-800 leading-relaxed pl-12">
+                        {selectedTask.completionNote || "Administrative closure with no formal notes recorded."}
+                      </p>
+                   </div>
+                </section>
+              )}
+
               <section className="space-y-4">
                 <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.25em] flex items-center gap-2">
                   <ClipboardList className="h-4 w-4" /> Primary Field Intelligence
@@ -294,7 +330,6 @@ export default function TasksListView() {
                 </div>
               </section>
 
-              {/* 3. Render the Exact Names using our new formatName helper */}
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm">
                   <div className="flex items-center gap-4 mb-6">
@@ -369,24 +404,6 @@ export default function TasksListView() {
                 </div>
               </div>
 
-              {(selectedTask.status === 'Cancelled' || selectedTask.status === 'Completed') && (
-                <section className="animate-in slide-in-from-bottom-4 duration-500">
-                   <div className={`p-8 rounded-[2rem] border ${selectedTask.status === 'Cancelled' ? 'bg-red-50/50 border-red-100' : 'bg-emerald-50/50 border-emerald-100'}`}>
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className={`p-2 rounded-lg ${selectedTask.status === 'Cancelled' ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'}`}>
-                          <AlertCircle className="h-5 w-5" />
-                        </div>
-                        <h4 className={`text-sm font-black uppercase tracking-widest ${selectedTask.status === 'Cancelled' ? 'text-red-900' : 'text-emerald-900'}`}>
-                          Final Resolution Summary
-                        </h4>
-                      </div>
-                      <p className="text-base font-bold text-slate-700 leading-relaxed pl-11 italic">
-                        {selectedTask.completionNote || "Administrative closure with no formal notes recorded."}
-                      </p>
-                   </div>
-                </section>
-              )}
-
               <div className="flex flex-col sm:flex-row justify-between items-center gap-4 py-6 border-t border-slate-100">
                 <div className="flex items-center gap-6">
                   <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
@@ -438,13 +455,16 @@ export default function TasksListView() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Category</label>
+                  
+                  {/* UPGRADE 3: Pulled in all 11 correct schema categories */}
                   <select className="w-full p-3 bg-slate-50 border rounded-xl text-sm font-bold mt-1"
                     value={editForm.category} onChange={(e) => setEditForm({...editForm, category: e.target.value})}>
-                    <option value="Rescue">Rescue</option>
-                    <option value="Medical">Medical</option>
-                    <option value="Logistics">Logistics</option>
-                    <option value="Fire">Fire</option>
+                    <option value="" disabled>Select Category...</option>
+                    {TASK_CATEGORIES.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
                   </select>
+
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Severity (1-5)</label>
