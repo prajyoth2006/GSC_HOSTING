@@ -2,6 +2,7 @@ import { User } from "../models/user.model.js";
 import { Task } from "../models/task.model.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+import { ApiError } from "../utils/ApiError.js";
 
 export const getSystemDashboard = asyncHandler(async (req, res) => {
     // 1. Run all queries concurrently for maximum performance
@@ -299,5 +300,55 @@ export const updateTaskDetails = asyncHandler(async (req, res) => {
 
     return res.status(200).json(
         new ApiResponse(200, task, "Task details have been manually corrected by Admin.")
+    );
+})
+
+const ALLOWED_CATEGORIES = [
+    'Medical', 'Rescue', 'Food & Water', 'Shelter', 
+    'Sanitation', 'Labor', 'Transport', 'Supplies', 
+    'Animal Rescue', 'Infrastructure', 'Other'
+];
+
+export const createNewTask = asyncHandler(async (req, res) => {
+    const { 
+        title, 
+        rawReportText, 
+        category, 
+        severity, 
+        locationDescription, 
+        longitude, 
+        latitude, 
+        requiredSkills 
+    } = req.body;
+
+    // 1. Basic Field Validation
+    if (!title || !rawReportText || !category || !severity || !longitude || !latitude) {
+        throw new ApiError(400, "All required fields must be provided, including coordinates.");
+    }
+
+    // 2. STRICT CATEGORY VALIDATION (Crucial for the matching engine)
+    if (!ALLOWED_CATEGORIES.includes(category)) {
+        throw new ApiError(400, `Invalid category '${category}'. Must be one of: ${ALLOWED_CATEGORIES.join(', ')}`);
+    }
+
+    // 3. Create the Task
+    const newTask = await Task.create({
+        title,
+        rawReportText,
+        category,
+        severity,
+        requiredSkills: requiredSkills || [],
+        locationDescription,
+        location: {
+            type: "Point",
+            coordinates: [Number(longitude), Number(latitude)] 
+        },
+        reportedBy: req.user._id, // Set the Admin as the reporter
+        status: "Pending" // Starts as pending until the matching engine picks it up
+    });
+
+    // 4. Send Response
+    return res.status(201).json(
+        new ApiResponse(201, newTask, "Task successfully created and is ready for matching.")
     );
 });
