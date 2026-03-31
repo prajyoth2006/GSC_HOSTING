@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ShieldAlert, Filter, Mail, Wrench } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
+import { ShieldAlert, Filter, Mail, Wrench, MoreHorizontal, UserCog, User as UserIcon } from 'lucide-react';
 
 interface User {
   _id: string;
@@ -10,15 +10,25 @@ interface User {
   role: string;
   skills: string[];
   createdAt: string;
-  isAvailable?: boolean; // Added to support volunteer availability
+  isAvailable?: boolean;
 }
 
 export default function UserDirectory() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const [roleFilter, setRoleFilter] = useState<string>('All');
+  
+  // State to manage which row's dropdown is open
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  // Close dropdown if user clicks anywhere else on the page
+  useEffect(() => {
+    const handleClickOutside = () => setOpenDropdownId(null);
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -74,8 +84,13 @@ export default function UserDirectory() {
     }
   };
 
+  const toggleDropdown = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation(); // Prevent the document click listener from firing immediately
+    setOpenDropdownId(openDropdownId === id ? null : id);
+  };
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 max-w-7xl mx-auto p-6">
       <div>
         <h2 className="text-3xl font-extrabold tracking-tight text-slate-900">Personnel Directory</h2>
         <p className="text-slate-500 font-medium mt-1">Manage and view all registered VolunMatch users.</p>
@@ -119,8 +134,8 @@ export default function UserDirectory() {
               <p className="text-sm font-medium text-slate-500">Syncing directory...</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
+            <div className="overflow-x-visible pb-16"> {/* pb-16 prevents dropdowns from being cut off at the bottom */}
+              <table className="w-full text-sm text-left relative">
                 <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
                   <tr>
                     <th className="px-6 py-4 font-semibold tracking-wider">Name & Role</th>
@@ -131,9 +146,9 @@ export default function UserDirectory() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {users.map((u) => (
-                    <tr key={u._id} className="hover:bg-slate-50/80 transition-colors group">
-
-                      {/* Name & Role Column */}
+                    <tr key={u._id} className="hover:bg-slate-50/80 transition-colors">
+                      
+                      {/* Name & Role */}
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${getRoleBadge(u.role)}`}>
@@ -148,36 +163,30 @@ export default function UserDirectory() {
                         </div>
                       </td>
 
-                      {/* Contact & Status Column */}
+                      {/* Contact & Status */}
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-2">
                           <div className="flex items-center gap-2 text-slate-600 font-medium text-sm">
                             <Mail className="h-3.5 w-3.5 text-slate-400" />
                             {u.email}
                           </div>
-
-                          {/* ONLY show Availability if the user is a Volunteer */}
                           {u.role === 'Volunteer' && (
                             <div className="flex items-center gap-1.5 mt-1">
                               <div className={`h-2.5 w-2.5 rounded-full ${u.isAvailable !== false ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]' : 'bg-slate-300'}`} />
                               <span className={`text-xs font-bold uppercase tracking-wider ${u.isAvailable !== false ? 'text-emerald-700' : 'text-slate-500'}`}>
-                                {u.isAvailable !== false ? 'Available for Assignment' : 'Unavailable'}
+                                {u.isAvailable !== false ? 'Available' : 'Unavailable'}
                               </span>
                             </div>
                           )}
                         </div>
                       </td>
 
-                      {/* Skills Column with Logic & Hover Tooltip */}
+                      {/* Skills Tooltip logic */}
                       <td className="px-6 py-4">
                         {u.role === 'Admin' || u.role === 'Worker' ? (
                           <span className="text-slate-400 text-xs italic font-medium">Not applicable for {u.role}s</span>
                         ) : u.skills && u.skills.length > 0 ? (
-
-                          /* Hover Reveal Group */
                           <div className="group/skills relative inline-block">
-
-                            {/* Truncated UI */}
                             <div className="flex flex-wrap gap-1 cursor-help">
                               {u.skills.slice(0, 2).map((skill, index) => (
                                 <span key={index} className="bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded text-xs font-medium">
@@ -190,8 +199,6 @@ export default function UserDirectory() {
                                 </span>
                               )}
                             </div>
-
-                            {/* Tooltip Content (Full List) */}
                             <div className="invisible opacity-0 group-hover/skills:visible group-hover/skills:opacity-100 transition-all duration-200 absolute z-50 left-0 top-full mt-2 w-64 bg-slate-900 text-slate-50 text-xs leading-relaxed rounded-lg shadow-xl border border-slate-700 p-3">
                               <div className="absolute -top-1.5 left-4 w-3 h-3 bg-slate-900 border-t border-l border-slate-700 rotate-45"></div>
                               <div className="relative z-10 flex flex-wrap gap-1.5">
@@ -202,7 +209,6 @@ export default function UserDirectory() {
                                 ))}
                               </div>
                             </div>
-
                           </div>
                         ) : (
                           <span className="text-slate-400 text-xs italic flex items-center gap-1 font-medium">
@@ -211,15 +217,41 @@ export default function UserDirectory() {
                         )}
                       </td>
 
-                      {/* Actions Column */}
-                      <td className="px-6 py-4 text-right">
-                        <Link
-                          // Adding the leading slash "/" ensures it goes to localhost:3000/directory/ID
-                          to={`/directory/${u._id}`}
-                          className="inline-flex items-center justify-center rounded-md text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 border border-slate-300 bg-white hover:bg-slate-50 hover:text-slate-900 h-8 px-4 text-slate-700 shadow-sm"
+                      {/* Actions Column with 3 Dots Menu */}
+                      <td className="px-6 py-4 text-right relative">
+                        <button
+                          onClick={(e) => toggleDropdown(e, u._id)}
+                          className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
-                          View Profile
-                        </Link>
+                          <MoreHorizontal className="h-5 w-5" />
+                        </button>
+
+                        {/* Custom Dropdown Menu */}
+                        {openDropdownId === u._id && (
+                          <div 
+                            className="absolute right-6 top-10 z-[100] w-48 bg-white rounded-md shadow-lg border border-slate-200 py-1 text-left"
+                            onClick={(e) => e.stopPropagation()} // Prevent clicking inside the menu from closing it immediately
+                          >
+                            <Link
+                              to={`/directory/${u._id}`}
+                              className="flex items-center px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 w-full"
+                            >
+                              <UserIcon className="h-4 w-4 mr-2 text-slate-400" />
+                              View Profile
+                            </Link>
+                            
+                            {/* Hide Role Update button if user is an Admin */}
+                            {u.role !== 'Admin' && (
+                              <Link
+                                to={`/update-role/${u._id}`}
+                                className="flex items-center px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 hover:text-blue-700 w-full font-medium"
+                              >
+                                <UserCog className="h-4 w-4 mr-2" />
+                                Update User Role
+                              </Link>
+                            )}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
