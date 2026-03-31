@@ -2,6 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ShieldAlert, MapPin, AlertCircle, Clock, Activity, Users, CheckCircle2, Filter, ArrowUpDown } from "lucide-react"
 import { useEffect, useState, useMemo } from "react"
 import { useAuth } from "@/context/AuthContext"
+import TaskMap from './TaskMap';
+
 import { 
   PieChart, Pie, Cell, 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid 
@@ -318,6 +320,10 @@ export default function DashboardView() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="w-full">
+        <TaskMap />
       </div>
 
       {/* BOTTOM SECTION: FILTERABLE DATA TABLE */}

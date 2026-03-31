@@ -21,6 +21,8 @@ import UpdateDetails from './pages/UpdateDetails';
 import UpdatePassword from './pages/UpdatePassword';
 import TasksListView from './pages/TasksListView';
 import UpdateUserRole from './pages/UpdateUserRole';
+import TaskDetails from './pages/TaskDetails';
+
 
 // NEW: Import the Create Task page
 import CreateTaskByAdmin from './pages/CreateTaskByAdmin'; 
@@ -78,6 +80,7 @@ export default function App() {
                 <Route path="/directory" element={<UserDirectory />} />
                 <Route path="/update-role/:userId" element={<UpdateUserRole/>}/>
                 <Route path="/directory/:userId" element={<UserProfileView />} />
+                <Route path="/tasks/:taskId" element={<TaskDetails />} />
                 
                 {/* 4. Account Settings */}
                 <Route path="/profile" element={<Profile />} />
