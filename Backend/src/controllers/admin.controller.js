@@ -423,3 +423,59 @@ export const updateUserRole = asyncHandler(async(req, res) => {
         new ApiResponse(200, updatedUser, `User successfully transitioned to ${role}`)
     );
 });
+
+export const getActiveTasksForMap = asyncHandler(async (req, res) => {
+    // 1. Fetch tasks, excluding 'Completed' and 'Cancelled'
+    const activeTasks = await Task.find({
+        status: { $nin: ["Completed", "Cancelled"] }
+    })
+    // 2. Select ONLY the fields needed for map markers and hover cards
+    .select("title rawReportText locationDescription category severity status location") 
+    .lean(); 
+
+    // 3. Filter out any edge cases where coordinates might be malformed
+    const validMapTasks = activeTasks.filter(task => 
+        task.location && 
+        task.location.coordinates && 
+        task.location.coordinates.length === 2
+    );
+
+    if (!validMapTasks.length) {
+        return res.status(200).json(
+            new ApiResponse(200, [], "No active tasks with location data found.")
+        );
+    }
+
+    return res.status(200).json(
+        new ApiResponse(200, validMapTasks, "Active map tasks fetched successfully")
+    );
+});
+
+// ==========================================
+// 2. GET FULL TASK DETAILS (A TO Z)
+// ==========================================
+export const getTaskDetails = asyncHandler(async (req, res) => {
+    const { taskId } = req.params;
+
+    if (!taskId) {
+        throw new ApiError(400, "Task ID is required");
+    }
+
+    // Fetch the task and populate the referenced user documents
+    const task = await Task.findById(taskId)
+        // Populate the person who reported it
+        .populate("reportedBy", "name email role phone") 
+        
+        // Populate the assigned volunteer (if there is one)
+        .populate("assignedVolunteer", "name email role skills isAvailable") 
+        
+        .lean(); 
+
+    if (!task) {
+        throw new ApiError(404, "Task not found");
+    }
+
+    return res.status(200).json(
+        new ApiResponse(200, task, "Full task details fetched successfully")
+    );
+});
