@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { authorizeRoles } from "../middlewares/role.middleware.js";
-import { getSystemDashboard , getUsersByRole, getUserProfileWithDetails, cancelTask, updateTaskDetails, createNewTask} from "../controllers/admin.controller.js";
+import { getSystemDashboard , getUsersByRole, getUserProfileWithDetails, cancelTask, updateTaskDetails, createNewTask, updateUserRole} from "../controllers/admin.controller.js";
 
 const router = Router();
 
@@ -34,5 +34,7 @@ router.route("/tasks/:taskId/update").patch(updateTaskDetails);
 //create task
 router.route("/create-task").post(createNewTask);
 
+// update user's role
+router.route("/update-role/:userId").patch(updateUserRole);
 
 export default router;

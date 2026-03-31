@@ -352,3 +352,74 @@ export const createNewTask = asyncHandler(async (req, res) => {
         new ApiResponse(201, newTask, "Task successfully created and is ready for matching.")
     );
 });
+
+export const updateUserRole = asyncHandler(async(req, res) => {
+    const { userId } = req.params;
+    const { adminKey, role, category, skills, location } = req.body;
+
+    // 1. Security Check
+    if (adminKey !== process.env.ADMIN_REGISTRATION_KEY) {
+        throw new ApiError(403, "Admin Key incorrect or missing");
+    }
+
+    // 2. Strict Role Restriction: Only Worker <-> Volunteer
+    if (!["Worker", "Volunteer"].includes(role)) {
+        throw new ApiError(400, "This route is only for switching between Worker and Volunteer");
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+        throw new ApiError(404, "User not found");
+    }
+
+    // 3. Admin Protection: Cannot touch Admin accounts here
+    if (user.role === "Admin") {
+        throw new ApiError(403, "Admin roles cannot be modified through this route");
+    }
+
+    // 4. Redundancy Check: Don't update if already in that role
+    if (user.role === role) {
+        throw new ApiError(400, `User is already registered as a ${role}`);
+    }
+
+    // 5. Data Handling for Transitions
+    if (role === "Volunteer") {
+        // Use the global ALLOWED_CATEGORIES constant for validation
+        if (!category) {
+            throw new ApiError(400, "Category is required to register as a Volunteer");
+        }
+
+        if (!ALLOWED_CATEGORIES.includes(category)) {
+            throw new ApiError(400, `Invalid category. Must be one of: ${ALLOWED_CATEGORIES.join(", ")}`);
+        }
+
+        user.category = category;
+        user.skills = skills || [];
+        
+        // Handle GeoJSON Location structure
+        if (location && location.coordinates) {
+            user.location = {
+                type: "Point",
+                coordinates: location.coordinates 
+            };
+        }
+        user.isAvailable = true;
+    } else {
+        // Transition to Worker: Clean up all Volunteer-specific fields
+        user.category = undefined;
+        user.skills = [];
+        user.location = undefined;
+    }
+
+    // Apply role change
+    user.role = role;
+
+    // 6. Save and Return
+    await user.save();
+
+    const updatedUser = await User.findById(userId).select("-password -refreshToken");
+
+    return res.status(200).json(
+        new ApiResponse(200, updatedUser, `User successfully transitioned to ${role}`)
+    );
+});
