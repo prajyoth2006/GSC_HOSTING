@@ -25,4 +25,8 @@ router.patch('/:taskId/assign', assignVolunteerToTask);
 // Route 5: Unassign (Undo)
 router.patch('/:taskId/unassign', unassignVolunteer);
 
+// Route 6: Get User Details
+// GET /api/v1/dispatch/user/:userId
+router.get('/user/:userId', getUserProfile);
+
 export default router;

@@ -337,3 +337,20 @@ export const unassignVolunteer = asyncHandler(async (req, res) => {
         new ApiResponse(200, null, "Assignment revoked. Task has been returned to the Triage Queue.")
     );
 });
+
+// Fetch full details of a specific user (Volunteer or Worker)
+export const getUserProfile = asyncHandler(async (req, res) => {
+    const { userId } = req.params;
+
+    // Find the user but EXCLUDE the password and __v fields
+    const user = await User.findById(userId).select("-password -__v");
+
+    if (!user) {
+        throw new ApiError(404, "User not found.");
+    }
+
+    // We can add a "Task History" count here later if you have a Task model reference
+    return res.status(200).json(
+        new ApiResponse(200, user, "User profile retrieved successfully.")
+    );
+});
