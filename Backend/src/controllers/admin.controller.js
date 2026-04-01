@@ -309,6 +309,7 @@ const ALLOWED_CATEGORIES = [
     'Animal Rescue', 'Infrastructure', 'Other'
 ];
 
+// create new task
 export const createNewTask = asyncHandler(async (req, res) => {
     const { 
         title, 
@@ -353,6 +354,7 @@ export const createNewTask = asyncHandler(async (req, res) => {
     );
 });
 
+// update the user role (Worker <-> Volunteer) with strict checks and data handling
 export const updateUserRole = asyncHandler(async(req, res) => {
     const { userId } = req.params;
     const { adminKey, role, category, skills, location } = req.body;
@@ -424,6 +426,7 @@ export const updateUserRole = asyncHandler(async(req, res) => {
     );
 });
 
+// get active pending tasks for showing on map
 export const getActiveTasksForMap = asyncHandler(async (req, res) => {
     // 1. Fetch tasks, excluding 'Completed' and 'Cancelled'
     const activeTasks = await Task.find({
@@ -451,9 +454,7 @@ export const getActiveTasksForMap = asyncHandler(async (req, res) => {
     );
 });
 
-// ==========================================
-// 2. GET FULL TASK DETAILS (A TO Z)
-// ==========================================
+// get the task-details when we enter on the map
 export const getTaskDetails = asyncHandler(async (req, res) => {
     const { taskId } = req.params;
 

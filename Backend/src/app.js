@@ -31,6 +31,10 @@ app.use("/api/v1/volunteers", volunteerRouter);
 import adminRouter from "./routes/admin.route.js"
 app.use("/api/v1/admins",adminRouter);
 
+// dispatch routes declaration
+import dispatchRoutes from './routes/dispatch.route.js';
+app.use('/api/v1/dispatch', dispatchRoutes);
+
 app.use((err, req, res, next) => {
     let statusCode = err.statusCode || 500;
     let message = err.message || "Internal Server Error";
