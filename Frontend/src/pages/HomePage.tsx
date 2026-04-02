@@ -1,8 +1,8 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { 
-  LayoutDashboard, Users, ShieldAlert, LogOut, 
-  User as UserIcon, Settings, Key, ChevronUp ,
+import {
+  LayoutDashboard, Users, ShieldAlert, LogOut,
+  User as UserIcon, Settings, Key, ChevronUp,
   ClipboardList
 } from 'lucide-react';
 
@@ -12,16 +12,16 @@ export default function Home() {
 
   const navItems = [
     { path: '/home', label: 'Dashboard Overview', icon: LayoutDashboard },
+    { path: '/triage', label: 'Emergency Triage', icon: ShieldAlert }, // The new Mission Control entry point
     { path: '/operations', label: 'Operational Log', icon: ClipboardList },
     { path: '/directory', label: 'Personnel Directory', icon: Users },
   ];
-
   return (
     <div className="flex min-h-screen bg-slate-50 font-sans text-slate-900">
-      
+
       {/* --- CLEAN PROFESSIONAL SIDEBAR --- */}
       <aside className="hidden md:flex w-64 bg-white h-screen sticky top-0 flex-col border-r border-slate-200 shadow-sm z-50">
-        
+
         {/* Branding Header - Clean Gray & Red */}
         <div className="p-6 flex items-center gap-3 border-b border-slate-100">
           <div className="p-2 bg-red-50 rounded-lg">
@@ -36,20 +36,19 @@ export default function Home() {
         {/* Navigation Links - Light Theme with Soft Blue Active State */}
         <nav className="p-4 space-y-1 flex-grow overflow-y-auto">
           {navItems.map((item) => {
-            const isActive = item.path === '/' 
-              ? location.pathname === '/' 
+            const isActive = item.path === '/'
+              ? location.pathname === '/'
               : location.pathname.startsWith(item.path);
-              
+
             const Icon = item.icon;
             return (
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 group ${
-                  isActive 
-                    ? 'bg-blue-50 text-blue-700 font-bold border border-blue-100' 
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 group ${isActive
+                    ? 'bg-blue-50 text-blue-700 font-bold border border-blue-100'
                     : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 <Icon className={`w-5 h-5 transition-colors ${isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
                 <span className="text-sm tracking-tight">{item.label}</span>
@@ -61,7 +60,7 @@ export default function Home() {
         {/* FOOTER: User Profile Section with Light Dropup */}
         <div className="mt-auto border-t border-slate-100 bg-slate-50/50 p-4">
           <div className="relative group">
-            
+
             {/* CLEAN DROPUP MENU */}
             <div className="absolute bottom-full left-0 right-0 mb-3 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0 z-[60]">
               <div className="bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden py-1 min-w-[200px]">
@@ -102,7 +101,7 @@ export default function Home() {
             </div>
           </div>
 
-          <button 
+          <button
             onClick={logout}
             className="w-full mt-4 flex items-center gap-3 px-4 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all border border-transparent hover:border-red-100"
           >
@@ -116,9 +115,9 @@ export default function Home() {
       <main className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
         <header className="bg-white/90 backdrop-blur-md border-b border-slate-200 px-8 py-5 sticky top-0 z-40">
           <h2 className="text-xs font-black text-slate-900 tracking-[0.2em] uppercase">
-            {location.pathname === '/' ? 'Operational Overview' : 
-             location.pathname.startsWith('/directory') ? 'Personnel Directory' : 
-             location.pathname.startsWith('/profile') ? 'Profile Management' : 'System Setup'}
+            {location.pathname === '/' ? 'Operational Overview' :
+              location.pathname.startsWith('/directory') ? 'Personnel Directory' :
+                location.pathname.startsWith('/profile') ? 'Profile Management' : 'System Setup'}
           </h2>
         </header>
         <div className="p-4 md:p-8">

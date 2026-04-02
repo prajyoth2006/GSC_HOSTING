@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getTriageTasks, getHardFilterCandidates , getSmartSortedCandidates, assignVolunteerToTask, unassignVolunteer} from '../controllers/dispatch.controller.js';
+import { getTriageTasks, getHardFilterCandidates , getSmartSortedCandidates, assignVolunteerToTask, unassignVolunteer, getUserProfile} from '../controllers/dispatch.controller.js';
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { authorizeRoles } from "../middlewares/role.middleware.js";
 

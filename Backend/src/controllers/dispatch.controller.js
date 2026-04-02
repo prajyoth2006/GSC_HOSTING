@@ -55,8 +55,7 @@ export const getHardFilterCandidates = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Task not found.");
     }
 
-    // 2. Define the "Search Rings" (in meters). 
-    // It will try 50km first. If 0 found, it tries 100km. If 0 found, it tries 200km.
+    // 2. Define the "Search Rings" (in meters)
     const searchRings = [50000, 100000, 200000]; 
     
     let candidates = [];
@@ -74,7 +73,7 @@ export const getHardFilterCandidates = asyncHandler(async (req, res) => {
                         coordinates: task.location.coordinates
                     },
                     distanceField: "distanceInMeters",
-                    maxDistance: currentRadius, // Uses the current ring radius
+                    maxDistance: currentRadius, 
                     query: { 
                         role: "Volunteer",
                         isAvailable: true,     
@@ -90,6 +89,7 @@ export const getHardFilterCandidates = asyncHandler(async (req, res) => {
                     phone: 1,
                     skills: 1,
                     category: 1,
+                    location: 1, // ✅ ADDED: Includes the [lng, lat] for Leaflet pins
                     distanceInKm: { $round: [{ $divide: ["$distanceInMeters", 1000] }, 1] }
                 }
             },
@@ -98,19 +98,17 @@ export const getHardFilterCandidates = asyncHandler(async (req, res) => {
             }
         ]);
 
-        // If we found at least 1 person, STOP expanding and break the loop!
         if (candidates.length > 0) {
             break;
         }
     }
 
-    // 4. Generate a smart message so the frontend Admin knows if the system had to expand
+    // 4. Generate the status message
     let message = `Found ${candidates.length} matching candidates within ${finalRadiusUsed / 1000}km.`;
     
     if (candidates.length === 0) {
         message = `Critical: No available volunteers found even after expanding the search to ${searchRings[searchRings.length - 1] / 1000}km.`;
     } else if (finalRadiusUsed > searchRings[0]) {
-        // Warn the admin that we had to pull people from further away
         message = `Expanded search to ${finalRadiusUsed / 1000}km to find ${candidates.length} candidates.`;
     }
 
@@ -122,9 +120,10 @@ export const getHardFilterCandidates = asyncHandler(async (req, res) => {
                 taskDetails: {
                     title: task.title,
                     category: task.category,
-                    requiredSkills: task.requiredSkills
+                    requiredSkills: task.requiredSkills,
+                    location: task.location // ✅ ADDED: Includes incident coordinates for the Red Pulse
                 },
-                searchRadiusKm: finalRadiusUsed / 1000, // Tell the UI what radius worked
+                searchRadiusKm: finalRadiusUsed / 1000, 
                 candidates: candidates
             },
             message
@@ -268,6 +267,7 @@ export const getSmartSortedCandidates = asyncHandler(async (req, res) => {
 
 // Assigning a volunteer to a task
 export const assignVolunteerToTask = asyncHandler(async (req, res) => {
+    console.log("Assign Volunteer Request Received:", { params: req.params, body: req.body }); // Debug log
     const { taskId } = req.params;
     const { volunteerId } = req.body;
 
@@ -343,7 +343,7 @@ export const getUserProfile = asyncHandler(async (req, res) => {
     const { userId } = req.params;
 
     // Find the user but EXCLUDE the password and __v fields
-    const user = await User.findById(userId).select("-password -__v");
+    const user = await User.findById(userId).select("-password -refreshToken");
 
     if (!user) {
         throw new ApiError(404, "User not found.");

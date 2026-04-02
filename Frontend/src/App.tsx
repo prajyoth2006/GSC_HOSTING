@@ -22,6 +22,7 @@ import UpdatePassword from './pages/UpdatePassword';
 import TasksListView from './pages/TasksListView';
 import UpdateUserRole from './pages/UpdateUserRole';
 import TaskDetails from './pages/TaskDetails';
+import DispatchPage from './pages/dispatch/DispatchPage';
 
 
 // NEW: Import the Create Task page
@@ -86,6 +87,10 @@ export default function App() {
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/update-details" element={<UpdateDetails />} />
                 <Route path="/update-password" element={<UpdatePassword />} />
+                
+                {/* 5. Dispatch Routes */}
+                <Route path="/triage" element={<DispatchPage />} />
+                <Route path="/dispatch/:taskId" element={<DispatchPage />} />
               </Route>
               
               {/* Catch-all route */}
