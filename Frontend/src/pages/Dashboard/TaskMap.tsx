@@ -7,6 +7,7 @@ import { AlertCircle, MapPin, ExternalLink, Layers, AlertTriangle, Navigation, M
 import { MapContainer, TileLayer, Marker, Popup, LayersControl, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { BASE_URL } from '../../utils/constants.js';
 
 // Fix for default Leaflet markers in React
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -76,7 +77,7 @@ export default function TaskMap() {
         }
 
         // Ensure this URL matches your Express router exactly
-        const response = await fetch('http://localhost:8000/api/v1/admins/map-data', {
+        const response = await fetch(`${BASE_URL}/admins/map-data`, {
           method: 'GET',
           headers: { 
             'Authorization': `Bearer ${token}`,

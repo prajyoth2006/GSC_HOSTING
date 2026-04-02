@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Clock, MapPin, ChevronRight, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { BASE_URL } from '../../../utils/constants.js';
 
 const TriageList = () => {
   const navigate = useNavigate();
@@ -12,7 +13,7 @@ const TriageList = () => {
     const fetchTriageTasks = async () => {
       try {
         const token = localStorage.getItem('token'); 
-        const response = await fetch('http://localhost:8000/api/v1/dispatch/triage', {
+        const response = await fetch(`${BASE_URL}/dispatch/triage`, {
           method: 'GET',
           credentials: 'include',
           headers: {

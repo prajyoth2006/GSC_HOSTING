@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { BASE_URL } from '../utils/constants.js';
 
 export type Role = 'Worker' | 'Admin' | 'Volunteer';
 
@@ -39,7 +40,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       try {
-        const response = await fetch('http://localhost:8000/api/v1/users/profile', {
+        const response = await fetch(`${BASE_URL}/users/profile`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,

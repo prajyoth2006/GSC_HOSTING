@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Settings, Save, AlertCircle } from 'lucide-react';
+import { BASE_URL } from '../../utils/constants.js';
 
 const UpdateDetails = () => {
   const { user, updateUser } = useAuth();
@@ -52,7 +53,7 @@ const UpdateDetails = () => {
 
       // 2. Send the request to your backend
       // Replace '/update-details' with your exact endpoint route (e.g., /update-account, /profile)
-      const response = await fetch('http://localhost:8000/api/v1/users/update-details', {
+      const response = await fetch(`${BASE_URL}/users/update-details`, {
         method: 'POST', // Use PATCH or PUT depending on your backend setup
         headers: {
           'Content-Type': 'application/json',

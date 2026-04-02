@@ -4,6 +4,7 @@ import {
   ShieldAlert, MapPin, ClipboardList, Save, 
   ArrowLeft, Crosshair, AlertCircle, CheckCircle2 
 } from 'lucide-react';
+import { BASE_URL } from '../../utils/constants.js';
 
 // Exact categories matching your backend schema
 const TASK_CATEGORIES = [
@@ -77,7 +78,7 @@ export default function CreateTaskByAdmin() {
 
     try {
       const authToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
-      const response = await fetch('http://localhost:8000/api/v1/admins/create-task', {
+      const response = await fetch(`${BASE_URL}/admins/create-task`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${authToken}`,

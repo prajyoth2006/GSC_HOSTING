@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth, Role } from '../../context/AuthContext';
 import { LogIn, Mail, Lock, AlertCircle, ShieldCheck } from 'lucide-react';
+import { BASE_URL } from '../../utils/constants.js';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -34,7 +35,7 @@ const LoginPage = () => {
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/users/login', {
+      const response = await fetch(`${BASE_URL}/users/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),

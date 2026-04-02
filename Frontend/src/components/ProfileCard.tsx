@@ -4,6 +4,7 @@ import {
   XCircle, AlertCircle, ShieldCheck, User as UserIcon, 
   Calendar, Fingerprint, Globe
 } from 'lucide-react';
+import { BASE_URL } from '../utils/constants.js';
 
 const ProfileCard = () => {
   const [profile, setProfile] = useState<any>(null);
@@ -19,7 +20,7 @@ const ProfileCard = () => {
           throw new Error('No access token found. Please login again.');
         }
 
-        const response = await fetch('http://localhost:8000/api/v1/users/profile', {
+        const response = await fetch(`${BASE_URL}/users/profile`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',

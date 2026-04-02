@@ -8,7 +8,7 @@ import {
 
 export default function Home() {
   const location = useLocation();
-  const { user, logout } = useAuth(); // Connected to real IIT Patna auth context
+  const { user, logout } = useAuth(); 
 
   const navItems = [
     { path: '/home', label: 'Dashboard Overview', icon: LayoutDashboard },

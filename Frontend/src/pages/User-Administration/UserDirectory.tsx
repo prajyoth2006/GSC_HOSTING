@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
 import { ShieldAlert, Filter, Mail, Wrench, MoreHorizontal, UserCog, User as UserIcon } from 'lucide-react';
+import { BASE_URL } from '../../utils/constants.js';
 
 interface User {
   _id: string;
@@ -44,7 +45,7 @@ export default function UserDirectory() {
       }
 
       try {
-        let url = 'http://localhost:8000/api/v1/admins/users';
+        let url = `${BASE_URL}/admins/users`;
         if (roleFilter !== 'All') {
           url += `?role=${roleFilter}`;
         }

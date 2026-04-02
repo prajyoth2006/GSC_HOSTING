@@ -8,6 +8,7 @@ import {
   Edit, Trash2, Save, Plus
 } from "lucide-react"
 import { useEffect, useState, useMemo } from "react"
+import { BASE_URL } from '../../utils/constants.js';
 
 // Exact categories matching your backend schema
 const TASK_CATEGORIES = [
@@ -66,7 +67,7 @@ export default function TasksListView() {
   const loadTasks = async () => {
     const authToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
     try {
-      const response = await fetch('http://localhost:8000/api/v1/admins/dashboard-stats', {
+      const response = await fetch(`${BASE_URL}/admins/dashboard-stats`, {
         headers: { 'Authorization': `Bearer ${authToken}` }
       });
       const result = await response.json();
@@ -86,7 +87,7 @@ export default function TasksListView() {
     const authToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
     
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/admins/tasks/${actionTask._id}/cancel`, {
+      const response = await fetch(`${BASE_URL}/admins/tasks/${actionTask._id}/cancel`, {
         method: 'PATCH',
         headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ completionNote: cancelNote })
@@ -109,7 +110,7 @@ export default function TasksListView() {
     };
 
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/admins/tasks/${actionTask._id}/update`, {
+      const response = await fetch(`${BASE_URL}/admins/tasks/${actionTask._id}/update`, {
         method: 'PATCH',
         headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

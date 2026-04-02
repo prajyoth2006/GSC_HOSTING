@@ -3,6 +3,7 @@ import { ShieldAlert, MapPin, AlertCircle, Clock, Activity, Users, CheckCircle2,
 import { useEffect, useState, useMemo } from "react"
 import { useAuth } from "@/context/AuthContext"
 import TaskMap from './TaskMap';
+import { BASE_URL } from '../../utils/constants.js';
 
 import { 
   PieChart, Pie, Cell, 
@@ -66,7 +67,7 @@ export default function DashboardView() {
       }
 
       try {
-        const response = await fetch('http://localhost:8000/api/v1/admins/dashboard-stats', {
+        const response = await fetch(`${BASE_URL}/admins/dashboard-stats`, {
           headers: {
             'Authorization': `Bearer ${authToken}`,
             'Content-Type': 'application/json'

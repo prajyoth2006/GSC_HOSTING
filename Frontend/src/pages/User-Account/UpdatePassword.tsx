@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Key, AlertCircle } from 'lucide-react';
+import { BASE_URL } from '../../utils/constants.js';
 
 const UpdatePassword = () => {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -34,7 +35,7 @@ const UpdatePassword = () => {
       }
 
       // 2. Send the update password request
-      const response = await fetch('http://localhost:8000/api/v1/users/update-password', {
+      const response = await fetch(`${BASE_URL}/users/update-password`, {
         method: 'POST', // Use POST or PATCH depending on your backend setup
         headers: {
           'Content-Type': 'application/json',
@@ -57,7 +58,7 @@ const UpdatePassword = () => {
 
       // 3. Hit the logout endpoint to destroy the old session
       try {
-        await fetch('http://localhost:8000/api/v1/users/logout', {
+        await fetch(`${BASE_URL}/users/logout`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

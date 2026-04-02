@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { BASE_URL } from '../../utils/constants.js';
 
 const ALLOWED_CATEGORIES = [
     'Medical', 'Rescue', 'Food & Water', 'Shelter',
@@ -53,7 +54,7 @@ export default function UpdateUserRole() {
         };
 
         try {
-            const response = await fetch(`http://localhost:8000/api/v1/admins/update-role/${userId}`, {
+            const response = await fetch(`${BASE_URL}/admins/update-role/${userId}`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',

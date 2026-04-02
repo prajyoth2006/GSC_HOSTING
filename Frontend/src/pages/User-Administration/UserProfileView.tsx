@@ -5,6 +5,7 @@ import {
   ArrowLeft, Mail, Shield, Activity, HardHat, 
   Calendar, MapPin, Filter, ArrowUpDown, Clock, CheckCircle2 
 } from 'lucide-react';
+import { BASE_URL } from '../../utils/constants.js';
 
 // --- Interfaces based on your real API response ---
 interface UserProfile {
@@ -63,7 +64,7 @@ export default function UserProfileView() {
       }
 
       try {
-        const response = await fetch(`http://localhost:8000/api/v1/admins/users/${userId}`, {
+        const response = await fetch(`${BASE_URL}/admins/users/${userId}`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${authToken}`,

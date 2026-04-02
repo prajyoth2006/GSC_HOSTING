@@ -9,6 +9,7 @@ import TacticalMap from './components/TacticalMap';
 import CandidateList from './components/CandidateList';
 import VolunteerProfile from './components/VolunteerProfile';
 import SmartSortToggle from './components/SmartSortToggle'; 
+import { BASE_URL } from '../../utils/constants.js';
 
 const DispatchPage = () => {
   const { taskId } = useParams();
@@ -38,7 +39,7 @@ const DispatchPage = () => {
       setLoadingMap(true);
       try {
         const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
-        const response = await fetch(`http://localhost:8000/api/v1/dispatch/${taskId}/candidates/hard-filter`, {
+        const response = await fetch(`${BASE_URL}/dispatch/${taskId}/candidates/hard-filter`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
@@ -65,7 +66,7 @@ const DispatchPage = () => {
         setIsAILoading(true);
         try {
           const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
-          const response = await fetch(`http://localhost:8000/api/v1/dispatch/${taskId}/candidates/smart-sort`, {
+          const response = await fetch(`${BASE_URL}/dispatch/${taskId}/candidates/smart-sort`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const result = await response.json();
@@ -99,7 +100,7 @@ const DispatchPage = () => {
     
     try {
       const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
-      const response = await fetch(`http://localhost:8000/api/v1/dispatch/${taskId}/assign`, {
+      const response = await fetch(`${BASE_URL}/dispatch/${taskId}/assign`, {
         method: 'PATCH',
         headers: { 
           'Authorization': `Bearer ${token}`,

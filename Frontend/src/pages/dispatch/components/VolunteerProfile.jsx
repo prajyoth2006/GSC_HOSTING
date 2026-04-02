@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Mail, ShieldCheck, Award, User, AlertCircle, Phone } from 'lucide-react';
+import { BASE_URL } from '../../../utils/constants.js';
 
 // FIXED: Added onAssignVolunteer and isAssigning to the props list
 const VolunteerProfile = ({ volunteerId, onClose, onAssignVolunteer, isAssigning }) => {
@@ -29,7 +30,7 @@ const VolunteerProfile = ({ volunteerId, onClose, onAssignVolunteer, isAssigning
           return;
         }
 
-        const response = await fetch(`http://localhost:8000/api/v1/dispatch/user/${volunteerId}`, {
+        const response = await fetch(`${BASE_URL}/dispatch/user/${volunteerId}`, {
           method: 'GET',
           headers: { 
             'Authorization': `Bearer ${token}`,

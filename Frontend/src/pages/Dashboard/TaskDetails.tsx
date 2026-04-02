@@ -5,6 +5,7 @@ import {
   ArrowLeft, MapPin, Calendar, Clock, User, Phone, 
   AlertTriangle, CheckCircle2, ShieldAlert, Wrench, FileText 
 } from 'lucide-react';
+import { BASE_URL } from '../../utils/constants.js';
 
 // Define the shape of our fully populated Task data
 interface PopulatedUser {
@@ -49,7 +50,7 @@ export default function TaskDetails() {
       setLoading(true);
       try {
         const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
-        const response = await fetch(`http://localhost:8000/api/v1/admins/${taskId}`, {
+        const response = await fetch(`${BASE_URL}/admins/${taskId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
