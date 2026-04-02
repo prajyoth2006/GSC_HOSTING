@@ -13,7 +13,9 @@ const UpdateDetails = () => {
   
   // Volunteer specific states
   // We join the array into a comma-separated string for the text input
-  const [skills, setSkills] = useState(user?.skills?.join(', ') || '');
+  const [skills, setSkills] = useState(
+    Array.isArray(user?.skills) ? user.skills.join(', ') : user?.skills || ''
+  );
   const [isAvailable, setIsAvailable] = useState(user?.isAvailable || false);
 
   // Status states

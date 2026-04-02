@@ -15,7 +15,7 @@
     "moduleDetection": "force",
     "allowJs": true,
     "jsx": "react-jsx",
-    
+    "ignoreDeprecations": "6.0",
     // ADDED: baseUrl is usually required for paths to resolve correctly
     "baseUrl": ".", 
     "paths": {
