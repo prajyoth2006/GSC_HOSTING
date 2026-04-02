@@ -163,6 +163,9 @@ export const escalateTask = asyncHandler(async (req, res) => {
     if (!task) throw new ApiError(404, "Task not found or unauthorized.");
     if (task.status === "Completed") throw new ApiError(400, "Cannot escalate completed task.");
 
+    // 🔴 Save volunteer before removing
+    const volunteerId = task.assignedVolunteer;
+
     task.status = "Pending";
     task.severity = 5; 
     task.assignedVolunteer = null; 
@@ -172,8 +175,14 @@ export const escalateTask = asyncHandler(async (req, res) => {
 
     await task.save();
 
-    // 🟢 SOCKET: THE MOST CRITICAL ALERT
-    // Moves the task back to the 'Pending' queue with max severity instantly
+    // 🟢 Make volunteer free again
+    if (volunteerId) {
+        await User.findByIdAndUpdate(volunteerId, {
+            isAvailable: true
+        });
+    }
+
+    // 🟢 SOCKET
     const io = req.app.get("io");
     if (io) {
         io.emit("taskEscalated", {

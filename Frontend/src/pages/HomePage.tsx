@@ -12,9 +12,9 @@ export default function Home() {
 
   const navItems = [
     { path: '/home', label: 'Dashboard Overview', icon: LayoutDashboard },
-    { path: '/triage', label: 'Emergency Triage', icon: ShieldAlert }, // The new Mission Control entry point
+    { path: '/triage', label: 'Task Dispatch', icon: ShieldAlert }, // The new Mission Control entry point
     { path: '/operations', label: 'Operational Log', icon: ClipboardList },
-    { path: '/directory', label: 'Personnel Directory', icon: Users },
+    { path: '/directory', label: 'User Administration', icon: Users },
   ];
   return (
     <div className="flex min-h-screen bg-slate-50 font-sans text-slate-900">

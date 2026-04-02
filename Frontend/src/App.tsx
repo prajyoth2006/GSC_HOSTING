@@ -9,24 +9,24 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
 
 // Pages
-import LandingPage from './pages/LandingPage';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
+import LandingPage from './pages/public/LandingPage';
+import LoginPage from './pages/public/LoginPage';
+import RegisterPage from './pages/public/RegisterPage';
 import HomePage from './pages/HomePage'; // This is your Layout Shell (Sidebar + Header)
-import DashboardView from './pages/DashboardView';
-import UserDirectory from './pages/UserDirectory';
-import UserProfileView from './pages/UserProfileView';
-import Profile from './pages/Profile';
-import UpdateDetails from './pages/UpdateDetails';
-import UpdatePassword from './pages/UpdatePassword';
-import TasksListView from './pages/TasksListView';
-import UpdateUserRole from './pages/UpdateUserRole';
-import TaskDetails from './pages/TaskDetails';
+import DashboardView from './pages/Dashboard/DashboardView';
+import UserDirectory from './pages/User-Administration/UserDirectory';
+import UserProfileView from './pages/User-Administration/UserProfileView';
+import Profile from './pages/User-Account/Profile';
+import UpdateDetails from './pages/User-Account/UpdateDetails';
+import UpdatePassword from './pages/User-Account/UpdatePassword';
+import TasksListView from './pages/operational-log/TasksListView';
+import UpdateUserRole from './pages/User-Administration/UpdateUserRole';
+import TaskDetails from './pages/Dashboard/TaskDetails';
 import DispatchPage from './pages/dispatch/DispatchPage';
 
 
 // NEW: Import the Create Task page
-import CreateTaskByAdmin from './pages/CreateTaskByAdmin'; 
+import CreateTaskByAdmin from './pages/operational-log/CreateTaskByAdmin'; 
 
 // --- Protected Route Wrapper ---
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
