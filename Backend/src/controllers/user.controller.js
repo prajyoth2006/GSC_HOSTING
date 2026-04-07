@@ -137,6 +137,7 @@ const registerUser = asyncHandler(async (req, res) => {
 
     const createdUser = await User.findById(user._id).select("-password -refreshToken");
 
+    // 🟢 --- REAL-TIME SOCKET NOTIFICATION ---
     const io = req.app.get("io");
     if (io) {
         io.emit("newPersonnelJoined", {
