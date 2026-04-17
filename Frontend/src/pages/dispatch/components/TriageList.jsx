@@ -9,16 +9,26 @@ const TriageList = () => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+useEffect(() => {
     const fetchTriageTasks = async () => {
       try {
-        const token = localStorage.getItem('token'); 
+        // FIX: Match the key used in your LoginPage
+        const token = localStorage.getItem('accessToken'); 
+        
+        // Safety check
+        if (!token) {
+            console.error("No token found! User might be logged out.");
+            setLoading(false);
+            return;
+        }
+
         const response = await fetch(`${BASE_URL}/dispatch/triage`, {
           method: 'GET',
-          credentials: 'include',
+          credentials: 'include', 
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${token}`,
+            'Credentials': 'include'
           }
         });
         
@@ -26,6 +36,8 @@ const TriageList = () => {
         
         if (data.success) {
           setTasks(data.data);
+        } else {
+            console.error("Backend error:", data.message);
         }
       } catch (error) {
         console.error("Failed to fetch triage queue:", error);
