@@ -1,5 +1,5 @@
-const IS_PRODUCTION = false;
+const IS_PRODUCTION = true;
 
 export const BASE_URL = IS_PRODUCTION 
-    ? "https://your-api-name.appspot.com/api"  // Example GCP URL
+    ? "https://gsc-backend-2026.onrender.com/api/v1"  // Example GCP URL
     : "http://localhost:8000/api/v1"; //local development URL
