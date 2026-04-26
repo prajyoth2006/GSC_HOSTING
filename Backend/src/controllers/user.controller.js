@@ -183,7 +183,9 @@ const loginUser = asyncHandler(async (req, res) => {
     // Secure cookie options
     const options = {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production" // True in prod, false in local dev
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "none",
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     };
 
     return res
@@ -220,9 +222,11 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
         }
 
         const options = {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production"
-        };
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "none",
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    };
 
         const { accessToken, refreshToken: newRefreshToken } = await generateAccessAndRefreshTokens(user._id);
 
@@ -252,7 +256,9 @@ const logoutUser = asyncHandler(async (req, res) => {
 
     const options = {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production"
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "none",
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     };
 
     return res
@@ -387,7 +393,9 @@ const updateUserPassword = asyncHandler(async (req, res) => {
     // Clear cookies on the client side to force them to log in again
     const options = {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production"
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "none",
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     };
 
     return res
