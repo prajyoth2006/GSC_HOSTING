@@ -24,7 +24,6 @@ export const extractTaskFromImage = asyncHandler(async (req, res) => {
 
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-        // --- UPDATED PROMPT: Added 'searchableAddress' ---
         const prompt = `
             You are an expert data extractor assisting in disaster response and community management.
             Analyze this handwritten field report. 
@@ -50,16 +49,15 @@ export const extractTaskFromImage = asyncHandler(async (req, res) => {
         const cleanResponse = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
         const extractedData = JSON.parse(cleanResponse);
 
-        // --- UPDATED GEOCODING: Use the new searchableAddress ---
-        // We use the simplified address for Google Maps, but keep the detailed description for the database
+        // --- UPDATED GEOCODING BLOCK ---
         const addressToSearch = extractedData.searchableAddress || extractedData.locationDescription;
 
         if (addressToSearch) {
             try {
-                const apiKey = process.env.GEMINI_API_KEY; // Ensure your .env has this key
+                const apiKey = process.env.GEMINI_API_KEY; 
 
-                // 1. Create a strict prompt asking for JSON only
-                const promptText = `Find the precise latitude and longitude for the following location: "${locationDescription}". 
+                // 1. Prompt fixed to use the correct variable
+                const promptText = `Find the precise latitude and longitude for the following location: "${addressToSearch}". 
     Return a JSON object with exactly two keys: 'lat' and 'lng', containing the numeric values. Do not include any other text.`;
 
                 const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
@@ -75,8 +73,8 @@ export const extractTaskFromImage = asyncHandler(async (req, res) => {
                             parts: [{ text: promptText }]
                         }],
                         generationConfig: {
-                            responseMimeType: "application/json", // Forces clean JSON output
-                            temperature: 0.1 // Low temperature for factual, deterministic responses
+                            responseMimeType: "application/json", 
+                            temperature: 0.1 
                         }
                     })
                 });
@@ -89,10 +87,10 @@ export const extractTaskFromImage = asyncHandler(async (req, res) => {
                     const { lat, lng } = JSON.parse(responseText);
 
                     if (lat && lng) {
-                        // Maintains the [longitude, latitude] array order, which is standard for GeoJSON in databases like MongoDB
-                        finalCoordinates = [lng, lat];
+                        // Assigning coordinates directly into the extractedData payload
+                        extractedData.location.coordinates = [lng, lat];
                     } else {
-                        console.warn("Gemini could not determine coordinates for:", locationDescription);
+                        console.warn("Gemini could not determine coordinates for:", addressToSearch);
                     }
                 }
             } catch (error) {
@@ -100,7 +98,7 @@ export const extractTaskFromImage = asyncHandler(async (req, res) => {
             }
         }
 
-        // We can safely delete searchableAddress before sending to the frontend since the DB doesn't need it
+        // Remove the temporary search field before sending to the client/database
         delete extractedData.searchableAddress;
 
         return res.status(200).json(
