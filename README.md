@@ -154,7 +154,7 @@ npm run start:frontend
 👨‍💼 Admin
 Email: alex@admin2.com
 Password: password123
-Admin Key: super_secret_admin_key_123
+Admin Key: super_secret_admin_key_123(only required when register)
 
 🙋 Volunteer
 Email: arjun2@volunteer.com
