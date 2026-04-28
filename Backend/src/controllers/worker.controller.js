@@ -9,6 +9,7 @@ import { Task } from "../models/task.model.js";
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 export const extractTaskFromImage = asyncHandler(async (req, res) => {
+    console.log("Received image for extraction:");
     if (!req.file) {
         throw new ApiError(400, "No image file provided");
     }
