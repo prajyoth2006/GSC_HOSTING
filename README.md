@@ -11,7 +11,7 @@
 
 🌐 **Web Dashboard:** https://gsc-hosting.vercel.app/  
 
-📱 **Android App:** Available in the repository Releases section  
+📱 **Android App:** https://github.com/prajyoth2006/GSC_HOSTING/releases/download/v1/app-arm64-v8a-release.apk  
 
 ---
 
