@@ -43,6 +43,40 @@ class VolunteerDrawer extends ConsumerWidget {
           ),
           
           const Divider(),
+          
+          // Availability Toggle
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Container(
+              decoration: BoxDecoration(
+                color: isOnline ? primary.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: isOnline ? primary.withValues(alpha: 0.3) : Colors.transparent),
+              ),
+              child: ListTile(
+                leading: Icon(
+                  isOnline ? Icons.location_on : Icons.location_off,
+                  color: isOnline ? primary : Colors.grey,
+                ),
+                title: Text(
+                  isOnline ? 'Online (Available)' : 'Offline',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: isOnline ? primary : Colors.grey[700],
+                  ),
+                ),
+                trailing: Switch(
+                  value: isOnline,
+                  activeColor: primary,
+                  onChanged: (value) async {
+                    await ref.read(volunteerProvider.notifier).toggleAvailability(value);
+                  },
+                ),
+              ),
+            ),
+          ),
+          
+          const Divider(),
           ListTile(
             leading: Icon(Icons.person_outline_rounded, color: primary), 
             title: const Text('My Profile', style: TextStyle(fontWeight: FontWeight.w600)), 

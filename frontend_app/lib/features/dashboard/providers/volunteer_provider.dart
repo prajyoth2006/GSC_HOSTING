@@ -37,6 +37,9 @@ class VolunteerNotifier extends AsyncNotifier<void> {
       double? lng;
       if (isAvailable) {
         LocationPermission permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.deniedForever) {
+          throw Exception('Location permissions are permanently denied');
+        }
         if (permission == LocationPermission.denied) {
           permission = await Geolocator.requestPermission();
           if (permission == LocationPermission.denied) {
@@ -50,7 +53,7 @@ class VolunteerNotifier extends AsyncNotifier<void> {
 
       await _repo.toggleAvailability(isAvailable, lat, lng);
       // to re-fetch if needed
-      ref.read(authStateProvider.notifier).build(); 
+      ref.invalidate(authStateProvider);
       state = const AsyncValue.data(null);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
